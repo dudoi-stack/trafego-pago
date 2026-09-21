@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION } from "./assets.ts";
+import { createCreative, getCreative, listCreatives } from "./creatives.ts";
 
 export interface StartServerOptions {
   host?: string;
@@ -27,14 +28,65 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
   }
   await ensureDataDir(opts.dataDir);
   const db = openDatabase(opts.dataDir);
+  // Módulo único de cálculo: fonte em src/shared/calc.ts, transpilado na hora
+  // para o navegador (ao-vivo). Cacheado no boot; em `bun build --compile`
+  // o `scripts/embed-assets.ts` gera `src/web/shared/calc.js` antes de embutir.
+  let calcJs: string | null = null;
+  async function getCalcJs(): Promise<string> {
+    if (calcJs != null) return calcJs;
+    const src = await Bun.file(new URL("../shared/calc.ts", import.meta.url)).text();
+    calcJs = new Bun.Transpiler({ loader: "ts" }).transformSync(src, "ts");
+    return calcJs;
+  }
+  try {
+    await getCalcJs();
+  } catch {
+    // Em exe sem arquivo-fonte ao lado, o fallback é o asset embutido (T6 cobre).
+    calcJs = null;
+  }
 
   const server = Bun.serve({
     hostname: host,
     port: opts.port ?? 4173,
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
       if (url.pathname === "/api/health" && req.method === "GET") {
         return Response.json({ status: "ok", version: APP_VERSION });
+      }
+      // Módulo único de cálculo servido ao navegador para o ao-vivo.
+      if (url.pathname === "/shared/calc.js" && req.method === "GET") {
+        try {
+          const js = await getCalcJs();
+          return new Response(js, {
+            headers: { "content-type": "text/javascript; charset=utf-8" },
+          });
+        } catch {
+          return Response.json({ error: "calc_indisponivel" }, { status: 500 });
+        }
+      }
+      if (url.pathname === "/api/creatives" && req.method === "GET") {
+        const data = listCreatives(db, {
+          q: url.searchParams.get("q") ?? "",
+          status: url.searchParams.get("status") ?? "all",
+          product: url.searchParams.get("product") ?? "",
+        });
+        return Response.json({ data, warnings: [] });
+      }
+      if (url.pathname === "/api/creatives" && req.method === "POST") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const result = createCreative(db, (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      const detail = url.pathname.match(/^\/api\/creatives\/(\d+)$/);
+      if (detail && req.method === "GET") {
+        const item = getCreative(db, Number(detail[1]));
+        if (!item) return Response.json({ error: "not_found" }, { status: 404 });
+        return Response.json({ data: item, warnings: [] });
       }
       if ((url.pathname === "/" || url.pathname === "/index.html") && req.method === "GET") {
         return new Response(INDEX_HTML, {

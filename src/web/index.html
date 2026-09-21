@@ -5,36 +5,237 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gestor de Tráfego Pago</title>
 <style>
-:root{--bg:#EBEFED;--surface:#fff;--ink:#16201C;--muted:#647570;--line:#D8DFDC;--ok:#0E76B8;--ok-bg:#D8ECF9}
+:root{--bg:#EBEFED;--surface:#fff;--ink:#16201C;--muted:#647570;--line:#D8DFDC;--btn:#16201C;--btn-ink:#fff;
+--good:#0B8A4C;--good-bg:#D9F2E4;--good-seg:#2FBF7A;--ok:#0E76B8;--ok-bg:#D8ECF9;--ok-seg:#3AA6E6;
+--warn:#8A5F00;--warn-bg:#F6E8BE;--warn-seg:#E2AE1F;--bad:#B72929;--bad-bg:#F8DADA;--bad-seg:#E5595B;--wait-bg:#E3E9E6;--wait:#5D6D68}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;padding:32px}
-.wrap{max-width:720px;margin:0 auto}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px}
-h1{margin:0 0 8px;font-size:24px}
-p{margin:8px 0;color:var(--muted)}
-.pill{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:99px;font-size:13px;font-weight:700;background:var(--ok-bg);color:var(--ok)}
-code{background:#eef2f0;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px;color:var(--ink)}
-#health{font-size:13px}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.45 system-ui,"Segoe UI",Roboto,Arial,sans-serif;padding:0}
+.app{display:grid;grid-template-columns:220px minmax(0,1fr);min-height:100vh}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:2px;position:sticky;top:0;height:100vh}
+.brand{font-weight:800;font-size:17px;padding:4px 10px 16px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{padding:9px 10px;border-radius:9px;text-decoration:none;color:#3A4843;font-weight:600}
+.nav a[aria-current="page"]{background:var(--btn);color:var(--btn-ink)}
+.main{padding:26px 28px 56px;min-width:0}
+.wrap{max-width:1100px;margin:0 auto}
+.ph{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.ph h1{margin:0;font-size:28px}
+.sub{color:var(--muted);font-size:13px;margin:4px 0 0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:16px}
+.panel-b{padding:18px}
+.fb{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.ctl{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.ctl input,.ctl select{border:0;background:transparent;outline:0}
+.ctl.search{min-width:240px}.ctl.search input{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 14px;border-radius:9px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-ink);font-weight:700;cursor:pointer;text-decoration:none}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.in{height:40px;width:100%;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
+.in.err{border-color:var(--bad)}
+.fld{display:grid;gap:6px;margin-bottom:14px}.fld>label{font-weight:700}
+.hint{font-size:12.5px;color:var(--muted)}
+.err-msg{font-size:13px;color:var(--bad);font-weight:700}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;padding:3px;background:#F4F7F6;gap:2px}
+.seg button{height:32px;padding:0 14px;border:0;border-radius:7px;background:transparent;cursor:pointer;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--surface);box-shadow:0 0 0 1px var(--line)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:12px;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl td{padding:11px 12px;border-bottom:1px solid #E8EDEB;vertical-align:middle}
+.tbl tr.click{cursor:pointer}.tbl tr.click:hover td{background:#F4F7F6}
+.tbl td.num,.tbl th.num{text-align:right}
+.nm{font-weight:700}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:99px;font-size:12px;font-weight:800;white-space:nowrap}
+.chip.good{background:var(--good-bg);color:var(--good)}.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.wait{background:var(--wait-bg);color:var(--wait)}
+.ruler{position:relative;display:inline-grid;grid-template-columns:repeat(4,1fr);gap:2px;width:104px;height:8px;vertical-align:middle}
+.ruler i{border-radius:2px}.ruler i:nth-child(1){background:var(--bad-seg)}.ruler i:nth-child(2){background:var(--warn-seg)}
+.ruler i:nth-child(3){background:var(--ok-seg)}.ruler i:nth-child(4){background:var(--good-seg)}
+.ruler b{position:absolute;top:-5px;bottom:-5px;width:4px;margin-left:-2px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 2px var(--surface)}
+.ruler.off i{background:var(--line)}
+.mut{color:var(--muted)}.prof.good{color:var(--good)}.prof.bad{color:var(--bad)}
+.recent{list-style:none;margin:0;padding:6px 0}.recent li{display:flex;justify-content:space-between;gap:10px;padding:10px 18px;border-bottom:1px solid #E8EDEB}
+.empty{padding:36px;text-align:center;color:var(--muted);display:grid;gap:10px;justify-items:center}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,16px);background:var(--btn);color:var(--btn-ink);padding:11px 16px;border-radius:10px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:50}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.cols{display:grid;grid-template-columns:minmax(0,640px) minmax(260px,1fr);gap:16px;align-items:start}
+@media(max-width:900px){.app{grid-template-columns:1fr}.side{height:auto;position:static;flex-direction:row;align-items:center}.cols,.two{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <span class="pill">Fase 0 · Esqueleto</span>
-    <h1>Gestor de Tráfego Pago</h1>
-    <p>Servidor local no ar. O painel completo (cadastro, lançamento diário e dashboard) chega nas próximas fases.</p>
-    <p id="health">Verificando <code>/api/health</code>…</p>
-  </div>
+<div class="app">
+  <aside class="side">
+    <div class="brand">Gestor de Tráfego</div>
+    <nav class="nav" aria-label="Principal">
+      <a href="#/criativos" data-nav="criativos">Criativos</a>
+      <a href="#/cadastro" data-nav="cadastro">Cadastro</a>
+    </nav>
+  </aside>
+  <main class="main"><div class="wrap" id="view"></div></main>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="module">
-try {
-  const res = await fetch("/api/health");
-  const body = await res.json();
-  document.getElementById("health").innerHTML =
-    `Saúde: <code>${res.status} ${body.status ?? "?"}</code> · só em <code>127.0.0.1</code>, sem rede.`;
-} catch {
-  document.getElementById("health").textContent = "Não foi possível alcançar /api/health.";
+import * as Calc from "/shared/calc.js";
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const view = () => $("#view");
+const toast = (m) => { const t = $("#toast"); t.textContent = m; t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2600); };
+const fDate = (s) => { const [y, m, d] = String(s).split("-"); return `${d}/${m}/${y.slice(2)}`; };
+const todayLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+// Usa o módulo único de cálculo servido pelo servidor (ao-vivo + formato BR).
+const fBRL = (cents) => Calc.formatBRL(cents);
+
+const FORMAT = { video: "Vídeo", image: "Imagem", carousel: "Carrossel" };
+const STATUS = { ativo: "Ativo", escalando: "Escalando", pausado: "Pausado", encerrado: "Encerrado" };
+
+function chipFor(h) {
+  const map = { "Saudável": "ok", "Atenção": "warn", "Escalando": "good", "Pausado": "bad", "Encerrado": "bad", "Sem dados": "wait" };
+  return `<span class="chip ${map[h.statusDisplay] ?? "wait"}">${esc(h.statusDisplay)}</span>`;
 }
+function rulerFor(h) {
+  const pos = { vermelho: 12, amarelo: 37, azul: 62, verde: 87 };
+  if (h.ruler === "cinza") return `<span class="ruler off" aria-hidden="true"><i></i><i></i><i></i><i></i></span>`;
+  return `<span class="ruler" role="img" aria-label="Saúde ${esc(h.statusDisplay)}"><i></i><i></i><i></i><i></i><b style="left:${pos[h.ruler] ?? 62}%"></b></span>`;
+}
+const profitClass = (cents) => cents == null ? "" : cents >= 0 ? "good" : "bad";
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(body.error || "erro"); e.status = res.status; e.body = body; throw e; }
+  return body;
+}
+
+// ---------- Biblioteca ----------
+const L = { q: "", status: "all", sort: "recent" };
+async function pageLibrary() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Criativos</h1><p class="sub" id="lib-sub">Biblioteca mínima — T2</p></div><a class="btn" href="#/cadastro">+ Cadastrar criativo</a></div>
+  <div class="fb">
+    <label class="ctl search"><input id="lib-q" placeholder="Buscar por nome ou produto" value="${esc(L.q)}" aria-label="Buscar criativo"></label>
+    <label class="ctl">Status <select id="lib-status"><option value="all">Todos</option>${Object.entries(STATUS).map(([k,v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
+    <label class="ctl">Ordenar <select id="lib-sort"><option value="recent">Mais recentes</option><option value="name">Nome A–Z</option><option value="profit">Maior lucro</option></select></label>
+  </div>
+  <section class="panel"><div class="panel-b" id="lib-body">Carregando…</div></section>`;
+  $("#lib-status").value = L.status; $("#lib-sort").value = L.sort;
+  $("#lib-q").addEventListener("input", (e) => { L.q = e.target.value; libBody(); });
+  $("#lib-status").addEventListener("change", (e) => { L.status = e.target.value; libBody(); });
+  $("#lib-sort").addEventListener("change", (e) => { L.sort = e.target.value; libBody(); });
+  $("#lib-body").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-id]"); if (tr) location.hash = "#/criativo/" + tr.dataset.id; });
+  await libBody();
+}
+async function libBody() {
+  const box = $("#lib-body");
+  try {
+    const qs = new URLSearchParams();
+    if (L.q.trim()) qs.set("q", L.q.trim());
+    if (L.status !== "all") qs.set("status", L.status);
+    const { data } = await api("/api/creatives?" + qs.toString());
+    let rows = [...data];
+    if (L.sort === "name") rows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    else if (L.sort === "profit") rows.sort((a, b) => (b.totals.profit_cents ?? -Infinity) - (a.totals.profit_cents ?? -Infinity));
+    else rows.sort((a, b) => b.start_date.localeCompare(a.start_date) || b.id - a.id);
+    $("#lib-sub").textContent = `${rows.length} criativo(s) na biblioteca`;
+    if (!rows.length) { box.innerHTML = `<div class="empty"><strong>Nenhum criativo encontrado</strong><span>Tente outra busca ou cadastre um novo.</span><a class="btn" href="#/cadastro">Cadastrar criativo</a></div>`; return; }
+    box.innerHTML = `<div style="overflow:auto"><table class="tbl"><thead><tr><th>Criativo</th><th>Status</th><th>Início</th><th class="num">Investimento</th><th class="num">Lucro</th><th>Saúde do dia</th><th>Motivo</th></tr></thead><tbody>${rows.map((c) => {
+      const pc = profitClass(c.totals.profit_cents);
+      return `<tr class="click" data-id="${c.id}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product || "—")} · ${FORMAT[c.format] ?? c.format}</div></td><td>${chipFor(c.health)}</td><td>${fDate(c.start_date)}</td><td class="num">${fBRL(c.totals.investment_cents)}</td><td class="num prof ${pc}">${fBRL(c.totals.profit_cents)}</td><td>${rulerFor(c.health)}</td><td class="mut">${esc(c.health.motivo ?? "—")}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+  } catch { box.innerHTML = `<div class="empty"><strong>Não foi possível carregar</strong></div>`; }
+}
+
+// ---------- Cadastro único (T2) ----------
+// produto/formato/data mantidos após cada cadastro para encadear o próximo.
+const R = { name: "", product: "", format: "video", start: todayLocal(), status: "ativo", url: "", notes: "" };
+async function pageRegister() {
+  let products = [];
+  try { const { data } = await api("/api/creatives"); products = [...new Set(data.map((c) => c.product).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR")); } catch {}
+  const isFuture = R.start > todayLocal();
+  view().innerHTML = `
+  <div class="ph"><div><h1>Cadastro</h1><p class="sub">Um Criativo por vez. Os números do dia entram depois, no lançamento.</p></div></div>
+  <div class="cols">
+  <section class="panel"><div class="panel-b">
+    <div class="fld"><label for="r-name">Nome do criativo</label><input class="in" id="r-name" value="${esc(R.name)}" placeholder="Ex.: Depoimento cozinha 03" autocomplete="off"><div class="err-msg" id="r-err" hidden></div></div>
+    <div class="fld"><label for="r-product">Produto ou oferta</label><input class="in" id="r-product" list="r-products" value="${esc(R.product)}" placeholder="Ex.: Mini processador" autocomplete="off"><datalist id="r-products">${products.map((p)=>`<option value="${esc(p)}">`).join("")}</datalist><span class="hint">Mantido após cadastrar para encadear o próximo.</span></div>
+    <div class="fld"><span class="l" style="font-weight:700">Formato</span><div class="seg" role="group" aria-label="Formato">${Object.entries(FORMAT).map(([k,v])=>`<button type="button" data-format="${k}" aria-pressed="${R.format===k}">${v}</button>`).join("")}</div></div>
+    <div class="two">
+      <div class="fld"><label for="r-start">Data de início</label><input type="date" class="in" id="r-start" value="${esc(R.start)}"><span class="hint">Mantida após cadastrar.</span></div>
+      <div class="fld"><label for="r-status">Status inicial</label><select class="in" id="r-status">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>
+    </div>
+    ${isFuture ? `<p class="hint" id="r-pre">Pré-cadastro: começa em ${fDate(R.start)} — não conta Dia 1 nem dispara Sinal até ter movimento.</p>` : ``}
+    <div class="fld"><label for="r-url">Link do criativo (opcional)</label><input class="in" id="r-url" type="url" value="${esc(R.url)}" placeholder="Pasta do Drive ou link do vídeo"></div>
+    <div class="fld"><label for="r-notes">Observações (opcional)</label><textarea class="in" id="r-notes" placeholder="Gancho, ângulo, público…">${esc(R.notes)}</textarea></div>
+    <div class="actions"><button class="btn" id="r-save" type="button">Cadastrar</button><button class="btn ghost" id="r-save-go" type="button">Cadastrar e lançar dados</button></div>
+  </div></section>
+  <section class="panel"><div class="panel-b"><strong>Últimos cadastrados</strong></div><ul class="recent" id="r-recent"><li class="mut">Carregando…</li></ul></section>
+  </div>`;
+  $("#r-status").value = R.status;
+  const err = (m) => { const e = $("#r-err"); e.textContent = m; e.hidden = false; $("#r-name").classList.add("err"); $("#r-name").focus(); };
+  const clearErr = () => { $("#r-err").hidden = true; $("#r-name").classList.remove("err"); };
+  $("#r-name").addEventListener("input", (e) => { R.name = e.target.value; clearErr(); });
+  $("#r-product").addEventListener("input", (e) => { R.product = e.target.value; });
+  $("#r-start").addEventListener("change", (e) => { R.start = e.target.value || todayLocal(); pageRegister(); });
+  $("#r-status").addEventListener("change", (e) => { R.status = e.target.value; });
+  $("#r-url").addEventListener("input", (e) => { R.url = e.target.value; });
+  $("#r-notes").addEventListener("input", (e) => { R.notes = e.target.value; });
+  $$("[data-format]").forEach((b) => b.addEventListener("click", () => { R.format = b.dataset.format; $$("[data-format]").forEach((x)=>x.setAttribute("aria-pressed", x===b)); }));
+  $("#r-save").addEventListener("click", () => submit(false, err));
+  $("#r-save-go").addEventListener("click", () => submit(true, err));
+  await paintRecent();
+}
+async function paintRecent() {
+  try {
+    const { data } = await api("/api/creatives");
+    const last = [...data].sort((a,b)=>b.id-a.id).slice(0,6);
+    $("#r-recent").innerHTML = last.length ? last.map((c)=>`<li><div><a href="#/criativo/${c.id}">${esc(c.name)}</a><div class="sub">${esc(c.product||"—")} · ${FORMAT[c.format]} · ${fDate(c.start_date)}</div></div>${chipFor(c.health)}</li>`).join("") : `<li class="mut">Nenhum criativo ainda.</li>`;
+  } catch { $("#r-recent").innerHTML = `<li class="mut">—</li>`; }
+}
+async function submit(goDaily, err) {
+  const payload = { name: R.name.trim(), product: R.product.trim(), format: R.format, start_date: R.start, status: R.status, url: R.url.trim(), notes: R.notes };
+  if (!payload.name) { err("Informe o nome do criativo."); return; }
+  try {
+    const { data } = await api("/api/creatives", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify(payload) });
+    // Mantém produto/formato/data para encadear; limpa só nome/link/observações.
+    R.name = ""; R.url = ""; R.notes = "";
+    toast(`Criativo cadastrado: ${data.name}`);
+    if (goDaily) { location.hash = "#/lancamento"; } else { pageRegister(); const f = $("#r-name"); if (f) f.focus(); }
+  } catch (e) {
+    const warns = e.body?.warnings ?? [];
+    if (e.body?.error === "nome_duplicado") err(warns[0] || "Já existe um criativo com esse nome.");
+    else err("Não foi possível cadastrar. Confira os campos.");
+  }
+}
+
+// ---------- Detalhe mínimo (réplica-da-planilha chega no T4) ----------
+async function pageDetail(id) {
+  try {
+    const { data: c } = await api("/api/creatives/" + id);
+    const pc = profitClass(c.totals.profit_cents);
+    view().innerHTML = `
+    <a href="#/criativos" style="color:var(--muted);text-decoration:none">← Criativos</a>
+    <div class="ph"><div><h1>${esc(c.name)}</h1><p class="sub">${esc(c.product||"—")} · ${FORMAT[c.format]} · início em ${fDate(c.start_date)}</p></div><div>${chipFor(c.health)}</div></div>
+    <section class="panel"><div class="panel-b" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${rulerFor(c.health)}<span><strong class="prof ${pc}">${fBRL(c.totals.profit_cents)}</strong> <span class="mut">lucro · ${fBRL(c.totals.investment_cents)} investidos · ${c.totals.sales} vendas</span></span><span class="mut">${esc(c.health.motivo ?? (c.health.dia1 ? "—" : "Pré-cadastro: sem Dia 1, sem Sinal até ter movimento."))}</span></div></section>
+    <section class="panel"><div class="panel-b"><strong>Lançamentos diários</strong><p class="sub">A planilha editável (TOTAL, filtro por mês, adicionar dia) chega no T4. O lançamento em lote de todos os Ativos chega no T3.</p><div class="actions"><a class="btn ghost" href="#/lancamento">Ir para lançamento</a></div></div></section>`;
+  } catch { location.hash = "#/criativos"; }
+}
+function pageDailyStub() {
+  view().innerHTML = `<div class="ph"><div><h1>Lançamento diário</h1><p class="sub">A tabela de todos os Ativos (Enter desce de linha, contador, salvar em lote) chega no T3.</p></div><a class="btn ghost" href="#/criativos">Voltar</a></div>`;
+}
+
+function router() {
+  $$(".nav a").forEach((a) => a.removeAttribute("aria-current"));
+  const h = location.hash || "#/criativos";
+  if (h.startsWith("#/cadastro")) { $('[data-nav="cadastro"]').setAttribute("aria-current","page"); pageRegister(); }
+  else if (h.startsWith("#/criativo/")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDetail(h.split("/")[2]); }
+  else if (h.startsWith("#/lancamento")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDailyStub(); }
+  else { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageLibrary(); }
+}
+window.addEventListener("hashchange", router);
+router();
 </script>
 </body>
 </html>
