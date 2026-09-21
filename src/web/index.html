@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gestor de Tráfego Pago</title>
+<style>
+:root{--bg:#EBEFED;--surface:#fff;--ink:#16201C;--muted:#647570;--line:#D8DFDC;--ok:#0E76B8;--ok-bg:#D8ECF9}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 system-ui,"Segoe UI",Roboto,Arial,sans-serif;padding:32px}
+.wrap{max-width:720px;margin:0 auto}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px}
+h1{margin:0 0 8px;font-size:24px}
+p{margin:8px 0;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:99px;font-size:13px;font-weight:700;background:var(--ok-bg);color:var(--ok)}
+code{background:#eef2f0;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px;color:var(--ink)}
+#health{font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <span class="pill">Fase 0 · Esqueleto</span>
+    <h1>Gestor de Tráfego Pago</h1>
+    <p>Servidor local no ar. O painel completo (cadastro, lançamento diário e dashboard) chega nas próximas fases.</p>
+    <p id="health">Verificando <code>/api/health</code>…</p>
+  </div>
+</div>
+<script type="module">
+try {
+  const res = await fetch("/api/health");
+  const body = await res.json();
+  document.getElementById("health").innerHTML =
+    `Saúde: <code>${res.status} ${body.status ?? "?"}</code> · só em <code>127.0.0.1</code>, sem rede.`;
+} catch {
+  document.getElementById("health").textContent = "Não foi possível alcançar /api/health.";
+}
+</script>
+</body>
+</html>

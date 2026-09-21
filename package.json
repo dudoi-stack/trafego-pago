@@ -1,0 +1,19 @@
+{
+  "name": "gestor-trafego",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gestor de Tráfego Pago — app local offline (Fase 0: esqueleto executável)",
+  "scripts": {
+    "dev": "bun run src/server/index.ts",
+    "start": "bun run src/server/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "embed": "bun run scripts/embed-assets.ts",
+    "build": "bun run scripts/build.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.3"
+  }
+}

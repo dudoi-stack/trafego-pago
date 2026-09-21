@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dados/
+*.db
+*.db-journal
+.gestor-trafego-test/
+# legado binário do Bun (<1.0); o lock atual bun.lock É versionado de propósito
+bun.lockb
