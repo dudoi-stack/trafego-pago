@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Gestor de Tráfego — protótipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+  --font-ui:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:"Bricolage Grotesque","Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --bg:#EBEFED; --surface:#FFFFFF; --surface-2:#F4F7F6; --ink:#16201C; --ink-2:#3A4843; --muted:#647570;
+  --line:#D8DFDC; --line-2:#E8EDEB; --btn:#16201C; --btn-ink:#FFFFFF;
+  --good:#0B8A4C; --good-bg:#D9F2E4; --good-seg:#2FBF7A;
+  --ok:#0E76B8;   --ok-bg:#D8ECF9;   --ok-seg:#3AA6E6;
+  --warn:#8A5F00; --warn-bg:#F6E8BE; --warn-seg:#E2AE1F;
+  --bad:#B72929;  --bad-bg:#F8DADA;  --bad-seg:#E5595B;
+  --wait:#5D6D68; --wait-bg:#E3E9E6; --hatch:#C9D2CE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0F1614; --surface:#172220; --surface-2:#1C2926; --ink:#E7EEEB; --ink-2:#C1CCC8; --muted:#8FA09A;
+    --line:#2A3A36; --line-2:#22302C; --btn:#E7EEEB; --btn-ink:#0F1614;
+    --good:#4ED08A; --good-bg:#12382A; --ok:#63B8F0; --ok-bg:#12334A;
+    --warn:#E8BC4A; --warn-bg:#3D3210; --bad:#F0787A; --bad-bg:#432022;
+    --wait:#9BAAA5; --wait-bg:#25332F; --hatch:#33443F;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0F1614; --surface:#172220; --surface-2:#1C2926; --ink:#E7EEEB; --ink-2:#C1CCC8; --muted:#8FA09A;
+  --line:#2A3A36; --line-2:#22302C; --btn:#E7EEEB; --btn-ink:#0F1614;
+  --good:#4ED08A; --good-bg:#12382A; --ok:#63B8F0; --ok-bg:#12334A;
+  --warn:#E8BC4A; --warn-bg:#3D3210; --bad:#F0787A; --bad-bg:#432022;
+  --wait:#9BAAA5; --wait-bg:#25332F; --hatch:#33443F;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.45 var(--font-ui);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+h1,h2,h3{margin:0;font-family:var(--font-display);letter-spacing:-.015em}
+p{margin:0}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+[hidden]{display:none!important}
+.ic{flex:none}
+.sub{color:var(--muted);font-size:13px}
+.mut{color:var(--muted)}
+
+/* ---------- estrutura ---------- */
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);align-items:start}
+.side{position:sticky;top:env(safe-area-inset-top,0px);height:calc(100vh - env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:2px;padding:18px 12px;background:var(--surface);border-right:1px solid var(--line);z-index:20}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 20px;font:700 17px/1.1 var(--font-display);letter-spacing:-.02em}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;text-decoration:none;color:var(--ink-2);font-weight:500;white-space:nowrap}
+.nav a:hover{background:var(--surface-2)}
+.nav a[aria-current="page"]{background:var(--btn);color:var(--btn-ink)}
+.bdg{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2)}
+.nav a[aria-current="page"] .bdg{background:transparent;border-color:currentColor;color:inherit}
+.side-foot{margin-top:auto;display:grid;gap:10px}
+.demo{font-size:12px;color:var(--muted);padding:0 10px}
+.main{min-width:0;padding:26px 32px 56px}
+.wrap{max-width:1240px;margin:0 auto}
+.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.ph h1{font-size:30px;line-height:1.1;font-weight:700}
+.ph .sub{margin-top:4px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tabs a{padding:9px 14px;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs a[aria-current="page"]{color:var(--ink);border-color:var(--ink)}
+
+/* ---------- botões e controles ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border-radius:9px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-ink);font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.sm{height:32px;padding:0 10px;font-size:13px}
+.lnk{background:none;border:0;padding:0;color:var(--ink-2);text-decoration:underline;cursor:pointer;font-size:13px}
+.in{height:40px;width:100%;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}
+.in:focus{outline:0;border-color:var(--ink);box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 12%,transparent)}
+.in.sm{height:34px;width:auto}
+textarea.in{height:auto;min-height:92px;padding:10px 12px;resize:vertical}
+.in.err{border-color:var(--bad)}
+.fb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+.ctl{display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface);cursor:pointer;color:var(--ink);white-space:nowrap}
+.ctl:hover{border-color:var(--muted)}
+.ctl small{color:var(--muted);font-size:12px}
+.ctl .k{color:var(--muted)}
+.ctl select{border:0;background:transparent;outline:0;cursor:pointer;padding:0 2px 0 0;max-width:160px}
+.ctl:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+.ctl select:focus-visible{outline:0}
+.ctl.search{cursor:text;min-width:240px}
+.ctl.search input{border:0;background:transparent;outline:0;flex:1;min-width:0}
+.dd{position:relative}
+.dd-menu{display:none;position:absolute;left:0;top:calc(100% + 6px);min-width:250px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.16);z-index:30}
+.dd.open .dd-menu{display:block}
+.dd-menu.wide{min-width:320px}
+.dd-item{display:block;width:100%;text-align:left;padding:8px 10px;border:0;border-radius:8px;background:none;cursor:pointer}
+.dd-item:hover{background:var(--surface-2)}
+.dd-item.on{font-weight:700;background:var(--surface-2)}
+.dd-sep{height:1px;background:var(--line-2);margin:6px 0}
+.range{display:flex;gap:8px;padding:4px 4px 6px}
+.range label{display:grid;gap:3px;font-size:12px;color:var(--muted)}
+.dd-search{padding:4px}
+.dd-list{max-height:280px;overflow:auto;padding:2px}
+.dd-opt{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer}
+.dd-opt:hover{background:var(--surface-2)}
+.dd-opt small{margin-left:auto;color:var(--muted)}
+.dd-foot{padding:6px 8px 4px;border-top:1px solid var(--line-2);margin-top:4px}
+input[type=checkbox]{accent-color:var(--ink);width:16px;height:16px;margin:0}
+
+/* ---------- painéis ---------- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:16px;min-width:0}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--line-2)}
+.panel-h h2{font-size:17px;font-weight:600}
+.panel-b{padding:18px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12.5px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.dot.good{background:var(--good-seg)}.dot.ok{background:var(--ok-seg)}.dot.warn{background:var(--warn-seg)}.dot.bad{background:var(--bad-seg)}
+.dot.ln{height:3px;width:16px;border-radius:2px}
+
+/* resumo do dashboard */
+.sum{display:grid;grid-template-columns:minmax(280px,1fr) 2.3fr;overflow:hidden}
+.hero{padding:22px 24px;display:flex;flex-direction:column;gap:6px}
+.lbl{font-size:13px;color:var(--muted);font-weight:500}
+.big{font:700 46px/1.05 var(--font-display);letter-spacing:-.03em}
+.big.good{color:var(--good)}.big.bad{color:var(--bad)}.big.nil{color:var(--muted)}
+.hero-sub{font-size:13px;display:flex;gap:8px;align-items:center;min-height:20px}
+.hero-roas{margin-top:14px;padding-top:14px;border-top:1px solid var(--line-2);display:grid;gap:8px}
+.rrow{display:flex;align-items:center;gap:10px}
+.rrow strong{font:700 24px/1 var(--font-display)}
+.ticks{position:relative;height:14px;font-size:11px;color:var(--muted)}
+.ticks span{position:absolute;transform:translateX(-50%)}
+.note{display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-radius:9px;padding:9px 10px}
+.mgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line-2);border-left:1px solid var(--line-2)}
+.mgrid>div{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.mgrid .v{font:600 21px/1.15 var(--font-display);letter-spacing:-.01em}
+.mgrid .s{font-size:12px;color:var(--muted);min-height:16px}
+.dl{font-size:12px;font-weight:600}
+.dl.g{color:var(--good)}.dl.b{color:var(--bad)}.dl.n{color:var(--muted)}
+
+/* gráfico */
+.chart{position:relative;padding:6px 10px 10px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font:11px var(--font-ui);fill:var(--muted)}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.16);font-size:12.5px;min-width:190px;z-index:5}
+.tip b{display:block;margin-bottom:6px}
+.tip div{display:flex;justify-content:space-between;gap:16px}
+.tip .mut{font-weight:400}
+
+/* ---------- tabelas ---------- */
+.scroll{overflow:auto;max-width:100%}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th.num,.tbl td.num{text-align:right}
+.tbl th[data-sort]{cursor:pointer;user-select:none}
+.tbl th[data-sort]:hover{color:var(--ink)}
+.tbl th .ar{margin-left:4px;color:var(--ink)}
+.tbl td:first-child{min-width:200px}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover td{background:var(--surface-2)}
+.nm{font-weight:600}
+.tbl .prof{font-weight:600}
+.prof.good{color:var(--good)}.prof.bad{color:var(--bad)}
+.rz{white-space:nowrap}
+.rz .rv{display:inline-block;min-width:38px;font-weight:600;margin-right:10px;text-align:right}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
+.chip.good{background:var(--good-bg);color:var(--good)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.wait{background:var(--wait-bg);color:var(--wait)}
+.st{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2)}
+.st::before{content:"";width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor}
+.st.scaling{font-weight:700;color:var(--ink)}.st.scaling::before{background:currentColor}
+.st.paused{color:var(--muted)}.st.paused::before{border-radius:1px;height:2px;border:0;background:currentColor;width:9px}
+.st.discarded{color:var(--muted);text-decoration:line-through}
+
+/* régua de ROAS */
+.ruler{position:relative;display:inline-grid;grid-template-columns:repeat(4,1fr);gap:2px;width:104px;height:8px;vertical-align:middle}
+.ruler.wide{width:100%;height:12px}
+.ruler i{border-radius:2px}
+.ruler i:nth-child(1){background:var(--bad-seg)}
+.ruler i:nth-child(2){background:var(--warn-seg)}
+.ruler i:nth-child(3){background:var(--ok-seg)}
+.ruler i:nth-child(4){background:var(--good-seg)}
+.ruler b{position:absolute;top:-5px;bottom:-5px;width:4px;margin-left:-2px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 2px var(--surface)}
+.ruler.off i{background:var(--line);opacity:.7}
+
+/* ---------- planilha do criativo ---------- */
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;font-weight:500;margin-bottom:10px}
+.back:hover{color:var(--ink)}
+.dsum{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line-2);overflow:hidden}
+.dsum>div{background:var(--surface);padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.dsum .v{font:600 20px/1.15 var(--font-display)}
+.dsum .v.good{color:var(--good)}.dsum .v.bad{color:var(--bad)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.pill{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:99px;background:transparent;cursor:pointer;font-weight:600;color:var(--ink-2)}
+.pill[aria-pressed="true"]{background:var(--btn);border-color:var(--btn);color:var(--btn-ink)}
+.sheetbox{max-height:62vh;overflow:auto}
+table.sheet{border-collapse:separate;border-spacing:0;width:100%;min-width:1000px}
+.sheet th{position:sticky;top:0;z-index:2;background:var(--surface);text-align:right;font-size:12px;font-weight:600;color:var(--muted);padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.sheet th.l,.sheet td.dt{text-align:left}
+.sheet th.auto{background:var(--surface-2)}
+.sheet td{padding:0 4px;height:38px;border-bottom:1px solid var(--line-2)}
+.sheet td.dt{padding:0 12px;font-weight:600;white-space:nowrap}
+.sheet td.calc{background:var(--surface-2);text-align:right;padding:0 10px;white-space:nowrap}
+.sheet td.calc.pos{background:var(--good-bg);color:var(--good);font-weight:600}
+.sheet td.calc.neg{background:var(--bad-bg);color:var(--bad);font-weight:600}
+.sheet td.calc.nil{color:var(--muted)}
+.sheet td.calc.b-good{background:var(--good-bg);color:var(--good);font-weight:700}
+.sheet td.calc.b-ok{background:var(--ok-bg);color:var(--ok);font-weight:700}
+.sheet td.calc.b-warn{background:var(--warn-bg);color:var(--warn);font-weight:700}
+.sheet td.calc.b-bad{background:var(--bad-bg);color:var(--bad);font-weight:700}
+.sheet tfoot td{position:sticky;bottom:0;background:var(--surface);border-top:2px solid var(--ink);border-bottom:0;font-weight:700;padding:0 10px;height:44px;text-align:right;white-space:nowrap}
+.sheet tfoot td.dt{text-align:left}
+.ci{width:100%;min-width:76px;height:32px;padding:0 8px;border:1px solid transparent;border-radius:7px;background:transparent;text-align:right}
+.ci:hover{border-color:var(--line)}
+.ci:focus{outline:0;border-color:var(--ink);background:var(--surface)}
+.ci.bad{border-color:var(--bad)}
+.ci::placeholder{color:var(--muted);font-style:italic}
+.wn{display:inline-flex;vertical-align:middle;margin-left:6px;color:var(--warn)}
+.addday{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.foot-note{padding:12px 18px;border-top:1px solid var(--line-2);color:var(--muted);font-size:12.5px}
+
+/* lançamento diário */
+.daybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.daybar .long{font:600 18px var(--font-display);margin-left:8px}
+.daytbl td{padding:6px 8px}
+.daytbl .ci{border-color:var(--line);background:var(--surface)}
+.daytbl .ci:focus{border-color:var(--ink)}
+.daytbl td.calc{background:var(--surface-2);text-align:right;white-space:nowrap}
+.savebar{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+
+/* formulários */
+.cols{display:grid;grid-template-columns:minmax(0,640px) minmax(260px,1fr);gap:16px;align-items:start}
+.form{display:grid;gap:16px;padding:20px}
+.fld{display:grid;gap:6px;align-content:start}
+.fld>label,.fld>.l{font-weight:600}
+.hint{font-size:12.5px;color:var(--muted)}
+.err-msg{font-size:12.5px;color:var(--bad);font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;padding:3px;background:var(--surface-2);gap:2px}
+.seg button{height:32px;padding:0 14px;border:0;border-radius:7px;background:transparent;cursor:pointer;font-weight:600;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;padding-top:4px}
+.recent{list-style:none;margin:0;padding:6px 0}
+.recent li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--line-2)}
+.recent li:last-child{border-bottom:0}
+.recent a{text-decoration:none;font-weight:600}
+.empty{padding:36px 24px;text-align:center;color:var(--muted);display:grid;gap:12px;justify-items:center}
+.empty strong{color:var(--ink);font:600 17px var(--font-display)}
+.bulkprev{display:flex;flex-wrap:wrap;gap:6px}
+.bulkprev span{background:var(--surface-2);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-size:12.5px}
+.bulkprev span.dup{border-color:var(--bad);color:var(--bad)}
+.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;margin-top:4px}
+.suffix{position:relative}
+.suffix .in{padding-right:44px}
+.suffix em{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-style:normal;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--btn);color:var(--btn-ink);padding:11px 16px;border-radius:10px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:50;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+@media (max-width:1100px){
+  .sum{grid-template-columns:1fr}
+  .mgrid{border-left:0;border-top:1px solid var(--line-2)}
+  .dsum{grid-template-columns:repeat(3,1fr)}
+  .cols{grid-template-columns:1fr}
+}
+@media (max-width:900px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{height:auto;flex-direction:row;align-items:center;gap:6px;padding:10px 12px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .brand{padding:0 8px 0 4px}.brand span{display:none}
+  .nav{flex-direction:row;gap:4px}
+  .side-foot{margin:0 0 0 auto;display:flex}
+  .demo{display:none}
+  .main{padding:18px 14px 44px}
+  .ph h1{font-size:26px}
+  .big{font-size:40px}
+}
+@media (max-width:640px){
+  .mgrid{grid-template-columns:repeat(2,1fr)}
+  .dsum{grid-template-columns:repeat(2,1fr)}
+  .two,.set-grid{grid-template-columns:1fr}
+  .ctl.search{min-width:0;width:100%}
+  .nav a span:not(.bdg){display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="16" width="5" height="10" rx="1.5" fill="#E5595B"/><rect x="9" y="12" width="5" height="14" rx="1.5" fill="#E2AE1F"/><rect x="16" y="7" width="5" height="19" rx="1.5" fill="#3AA6E6"/><rect x="23" y="2" width="4" height="24" rx="1.5" fill="#2FBF7A"/></svg>
+      <span>Gestor de Tráfego</span>
+    </div>
+    <nav class="nav" id="nav" aria-label="Principal">
+      <a href="#/dashboard" data-nav="dash"><i data-ic="dashboard"></i><span>Dashboard</span></a>
+      <a href="#/criativos" data-nav="crea"><i data-ic="clips"></i><span>Criativos</span><em class="bdg" id="badge" hidden></em></a>
+      <a href="#/cadastro" data-nav="reg"><i data-ic="plus"></i><span>Cadastro</span></a>
+      <a href="#/config" data-nav="cfg"><i data-ic="sliders"></i><span>Configurações</span></a>
+    </nav>
+    <div class="side-foot">
+      <button class="btn ghost sm" id="theme" type="button"></button>
+      <p class="demo">Protótipo com dados de exemplo. Nada do que você digitar aqui é salvo.</p>
+    </div>
+  </aside>
+  <main class="main"><div class="wrap" id="view"></div></main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script>
+'use strict';
+/* =====================================================================
+   PROTÓTIPO — Gestor de Tráfego Pago
+   Tudo em memória, com dados de exemplo. No sistema real, os mesmos
+   cálculos (calc) rodam no servidor e os dados ficam no SQLite.
+   ===================================================================== */
+const TODAY = '2026-09-20';
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf  = o => new Intl.NumberFormat('pt-BR', o);
+const BRL = nf({style:'currency', currency:'BRL'});
+const N2  = nf({minimumFractionDigits:2, maximumFractionDigits:2});
+const N0  = nf({maximumFractionDigits:0});
+const fBRL = v => v == null ? '—' : BRL.format(v);
+const fN2  = v => v == null ? '—' : N2.format(v);
+const fN0  = v => v == null ? '—' : N0.format(v);
+const pad  = n => String(n).padStart(2, '0');
+
+/* ---------- datas (sempre 'AAAA-MM-DD', em UTC para evitar fuso) ---------- */
+const D = s => new Date(s + 'T00:00:00Z');
+const iso = d => d.toISOString().slice(0, 10);
+const addDays = (s, n) => { const d = D(s); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+const diffDays = (a, b) => Math.round((D(b) - D(a)) / 864e5);
+const fDate = s => { const [y, m, d] = s.split('-'); return `${d}/${m}/${y.slice(2)}`; };
+const fDay  = s => { const [, m, d] = s.split('-'); return `${d}/${m}`; };
+const MES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const monthLabel = ym => `${MES[+ym.slice(5, 7) - 1]}/${ym.slice(2, 4)}`;
+const longDate = s => new Intl.DateTimeFormat('pt-BR', {weekday:'long', day:'numeric', month:'long', timeZone:'UTC'}).format(D(s));
+
+/* número digitado pelo usuário: aceita "4,18" e "4.18" */
+function parseNum(str) {
+  if (str == null) return null;
+  let s = String(str).trim();
+  if (s === '') return null;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+const fIn = v => v == null ? '' : N2.format(v);
+
+/* ---------- ícones ---------- */
+const IC = {
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  clips:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5l5 2.5-5 2.5z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  sliders:'<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+  chev:'<path d="M6 9l6 6 6-6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  left:'<path d="M15 6l-6 6 6 6"/>',
+  right:'<path d="M9 6l6 6-6 6"/>',
+  warn:'<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7"/>'
+};
+const icon = (n, s = 18) => `<svg class="ic" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${IC[n]}</svg>`;
+
+/* ---------- estado ---------- */
+const state = {
+  settings: { tax: 0.1386, breakeven: 1.0, good: 1.2, scale: 1.6, minSpend: 30 },
+  creatives: [],
+  entries: [],
+  nextId: 12
+};
+const STATUS = { testing:'Testando', scaling:'Escalando', paused:'Pausado', discarded:'Descartado' };
+const FORMAT = { video:'Vídeo', image:'Imagem', carousel:'Carrossel' };
+
+/* ---------- dados de exemplo ---------- */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function seed() {
+  const tax = state.settings.tax;
+  /* Criativo 1: números REAIS da planilha enviada (Faturamento estava zerado = ainda não lançado) */
+  state.creatives.push({ id:1, name:'Criativo 01 (planilha de agosto)', product:'Sem produto', format:'video', status:'paused', start:'2026-08-01', url:'', notes:'Importado da planilha original.' });
+  [[1,4.18,1,10,19],[2,6.64,0,45,56],[3,7.65,1,54,71],[4,5.06,0,77,55],[5,8.01,2,73,110],[6,6.6,3,77,113],[7,4.91,0,45,68],
+   [8,24.8,13,217,324],[9,28.11,12,208,297],[10,32.38,6,243,393],[11,33.85,9,292,428],[12,34.7,10,321,480],[20,10,12,2,10]
+  ].forEach(([d, invest, sales, clM, clS]) => state.entries.push({ cid:1, date:`2026-08-${pad(d)}`, invest, sales, rev:null, clM, clS, tax }));
+
+  /* Demais criativos: simulados */
+  const rnd = mulberry32(20260920);
+  const PEND_FROM = '2026-09-18';               // faturamento dos últimos dias ainda não foi lançado
+  const specs = [
+    {id:2, name:'Depoimento cozinha 02', product:'Mini processador', format:'video', start:'2026-07-08', status:'scaling', base:34, roas:1.9, comm:9.2, growth:true},
+    {id:3, name:'UGC achadinho gaveta', product:'Organizador de gavetas', format:'video', start:'2026-07-19', status:'scaling', base:28, roas:1.75, comm:7.4},
+    {id:4, name:'Antes e depois escova', product:'Escova alisadora', format:'video', start:'2026-08-02', status:'scaling', base:24, roas:1.7, comm:11.5},
+    {id:5, name:'Carrossel 5 motivos', product:'Fone bluetooth', format:'carousel', start:'2026-08-13', status:'testing', base:18, roas:1.36, comm:8.1},
+    {id:6, name:'Imagem oferta relâmpago', product:'Luminária LED', format:'image', start:'2026-08-20', end:'2026-08-29', status:'paused', base:14, roas:.72, comm:6.3},
+    {id:7, name:'Unboxing fone', product:'Fone bluetooth', format:'video', start:'2026-08-26', status:'testing', base:22, roas:1.12, comm:8.1},
+    {id:8, name:'Tutorial mini processador', product:'Mini processador', format:'video', start:'2026-09-02', status:'testing', base:16, roas:1.55, comm:9.2},
+    {id:9, name:'Hook pergunta escova', product:'Escova alisadora', format:'video', start:'2026-09-09', status:'testing', base:12, roas:.86, comm:11.5},
+    {id:10, name:'Reels rotina da manhã', product:'Luminária LED', format:'video', start:'2026-09-16', status:'testing', base:7, roas:1.4, comm:6.3},
+    {id:11, name:'Story antes e depois gaveta', product:'Organizador de gavetas', format:'image', start:'2026-07-10', end:'2026-08-04', status:'discarded', base:20, roas:.8, comm:7.4}
+  ];
+  specs.forEach(sp => {
+    state.creatives.push({ id:sp.id, name:sp.name, product:sp.product, format:sp.format, status:sp.status, start:sp.start, url:'', notes:'' });
+    const n = diffDays(sp.start, sp.end || '2026-09-19');
+    for (let i = 0; i <= n; i++) {
+      const date = addDays(sp.start, i);
+      const ramp = Math.min(1, .45 + i * .18);
+      const grow = sp.growth ? Math.min(1.7, Math.pow(1.012, i)) : 1;
+      const invest = Math.round(sp.base * ramp * grow * (.78 + .44 * rnd()) * 100) / 100;
+      const clM = Math.max(1, Math.round(invest / (.09 + rnd() * .08)));
+      const clS = Math.round(clM * (1.22 + rnd() * .35));
+      const target = invest * (1 + tax) * sp.roas * (.62 + .76 * rnd());
+      const sales = Math.max(0, Math.round(target / sp.comm));
+      const rev = Math.round(sales * sp.comm * 100) / 100;
+      state.entries.push({ cid:sp.id, date, invest, sales, rev: date >= PEND_FROM ? null : rev, clM, clS, tax });
+    }
+  });
+}
+
+/* =====================================================================
+   REGRAS DE CÁLCULO (mesmas fórmulas da planilha)
+   Custo c/ imposto = Investimento × (1 + imposto)       (coluna "Imposto")
+   Lucro            = Faturamento − Custo c/ imposto
+   CPC Meta/Shopee  = Investimento ÷ Cliques
+   ROAS             = Faturamento ÷ Custo c/ imposto
+   Totais: ROAS = Σ faturamento ÷ Σ custo (nunca a média dos ROAS diários)
+   Dia sem faturamento lançado (null) fica FORA do lucro e do ROAS.
+   ===================================================================== */
+const costOf = e => e.invest * (1 + e.tax);
+function calcRow(e) {
+  const cost = costOf(e);
+  return {
+    cost,
+    profit: e.rev == null ? null : e.rev - cost,
+    cpcM: e.clM > 0 ? e.invest / e.clM : null,
+    cpcS: e.clS > 0 ? e.invest / e.clS : null,
+    roas: e.rev == null || cost <= 0 ? null : e.rev / cost
+  };
+}
+function agg(list) {
+  const a = { invest:0, cost:0, sales:0, clM:0, clS:0, rev:0, costClosed:0, days:list.length, pendingCost:0 };
+  const pend = new Set();
+  for (const e of list) {
+    const c = costOf(e);
+    a.invest += e.invest; a.cost += c; a.sales += e.sales; a.clM += e.clM; a.clS += e.clS;
+    if (e.rev == null) { if (e.invest > 0) { pend.add(e.date); a.pendingCost += c; } }
+    else { a.rev += e.rev; a.costClosed += c; }
+  }
+  a.pendingDays = pend.size;
+  a.roas   = a.costClosed > 0 ? a.rev / a.costClosed : null;
+  a.profit = a.costClosed > 0 ? a.rev - a.costClosed : null;
+  a.cpcM = a.clM > 0 ? a.invest / a.clM : null;
+  a.cpcS = a.clS > 0 ? a.invest / a.clS : null;
+  a.cps  = a.sales > 0 ? a.cost / a.sales : null;
+  return a;
+}
+const bandOf = r => {
+  const s = state.settings;
+  if (r == null) return 'wait';
+  return r >= s.scale ? 'good' : r >= s.good ? 'ok' : r >= s.breakeven ? 'warn' : 'bad';
+};
+function decisionOf(a) {
+  if (!a.days || a.cost === 0) return 'nodata';
+  if (a.costClosed === 0) return 'pending';
+  if (a.costClosed < state.settings.minSpend) return 'collect';
+  return bandOf(a.roas);
+}
+const DEC = {
+  good:['Escalar','good'], ok:['Manter','ok'], warn:['Observar','warn'], bad:['Pausar','bad'],
+  collect:['Coletando dados','wait'], pending:['Aguardando faturamento','wait'], nodata:['Sem dados','wait']
+};
+
+/* ---------- componentes visuais ---------- */
+const chip = k => `<span class="chip ${DEC[k][1]}">${DEC[k][0]}</span>`;
+const stChip = s => `<span class="st ${s}">${STATUS[s]}</span>`;
+function rulerPos(r) {
+  const { breakeven:b, good:g, scale:c } = state.settings;
+  if (r <= 0) return 0;
+  if (r < b) return r / b * 25;
+  if (r < g) return 25 + (r - b) / (g - b) * 25;
+  if (r < c) return 50 + (r - g) / (c - g) * 25;
+  return 75 + Math.min((r - c) / (c * .5), 1) * 25;
+}
+function ruler(r, cls = '') {
+  const has = r != null;
+  return `<span class="ruler ${cls}${has ? '' : ' off'}" ${has ? `role="img" aria-label="ROAS ${fN2(r)}"` : 'aria-hidden="true"'}><i></i><i></i><i></i><i></i>${has ? `<b style="left:${rulerPos(r).toFixed(1)}%"></b>` : ''}</span>`;
+}
+function delta(cur, prev, mode = 'neutral') {
+  if (cur == null || prev == null || prev === 0) return '';
+  const p = (cur - prev) / Math.abs(prev) * 100;
+  if (Math.abs(p) < 0.5) return '<span class="dl n">= estável</span>';
+  const up = p > 0;
+  const cls = mode === 'neutral' ? 'n' : ((up === (mode === 'up')) ? 'g' : 'b');
+  return `<span class="dl ${cls}">${up ? '▲' : '▼'} ${N0.format(Math.abs(p))}%</span>`;
+}
+const entriesOf = id => state.entries.filter(e => e.cid === id);
+const getEntry = (id, date) => state.entries.find(e => e.cid === id && e.date === date);
+const minDate = () => state.entries.reduce((m, e) => e.date < m ? e.date : m, TODAY);
+const activeCreatives = () => state.creatives.filter(c => c.status === 'testing' || c.status === 'scaling');
+/* =====================================================================
+   DASHBOARD
+   ===================================================================== */
+const view = () => $('#view');
+const PRESETS = [['today','Hoje'],['yesterday','Ontem'],['7d','Últimos 7 dias'],['14d','Últimos 14 dias'],['30d','Últimos 30 dias'],['month','Este mês'],['lastmonth','Mês passado'],['all','Todo o período'],['custom','Personalizado']];
+const F = { preset:'30d', from:TODAY, to:TODAY, ids:new Set(), status:'all', product:'all', band:'all', sort:{k:'profit', dir:-1} };
+let chartRO = null;
+
+function periodRange() {
+  switch (F.preset) {
+    case 'today': return [TODAY, TODAY];
+    case 'yesterday': { const y = addDays(TODAY, -1); return [y, y]; }
+    case '7d': return [addDays(TODAY, -6), TODAY];
+    case '14d': return [addDays(TODAY, -13), TODAY];
+    case '30d': return [addDays(TODAY, -29), TODAY];
+    case 'month': return [TODAY.slice(0, 8) + '01', TODAY];
+    case 'lastmonth': { const first = TODAY.slice(0, 8) + '01'; const d = D(first); d.setUTCMonth(d.getUTCMonth() - 1); return [iso(d), addDays(first, -1)]; }
+    case 'all': return [minDate(), TODAY];
+    default: return F.from <= F.to ? [F.from, F.to] : [F.to, F.from];
+  }
+}
+const presetLabel = () => (PRESETS.find(p => p[0] === F.preset) || [])[1];
+const isDefaultFilters = () => F.preset === '30d' && !F.ids.size && F.status === 'all' && F.product === 'all' && F.band === 'all';
+
+function dashData() {
+  const [from, to] = periodRange();
+  const len = diffDays(from, to) + 1;
+  const inR = (e, a, b) => e.date >= a && e.date <= b;
+  const cs = state.creatives.filter(c => (F.status === 'all' || c.status === F.status) && (F.product === 'all' || c.product === F.product) && (!F.ids.size || F.ids.has(c.id)));
+  const rows = cs.map(c => { const a = agg(state.entries.filter(e => e.cid === c.id && inR(e, from, to))); return { c, a, dec: decisionOf(a) }; }).filter(r => r.a.days > 0);
+  const rowsF = F.band === 'all' ? rows : rows.filter(r => r.dec === F.band);
+  const ids = new Set(rowsF.map(r => r.c.id));
+  const cur = state.entries.filter(e => ids.has(e.cid) && inR(e, from, to));
+  const total = agg(cur);
+  let prev = null;
+  if (F.preset !== 'all') {
+    const pTo = addDays(from, -1), pFrom = addDays(pTo, -(len - 1));
+    prev = agg(state.entries.filter(e => ids.has(e.cid) && inR(e, pFrom, pTo)));
+    if (!prev.days) prev = null;
+  }
+  const days = [];
+  for (let i = 0; i < len; i++) {
+    const date = addDays(from, i);
+    const es = cur.filter(e => e.date === date);
+    if (!es.length) { days.push({ date, empty:true }); continue; }
+    const a = agg(es);
+    days.push({ date, cost:a.cost, rev:a.costClosed > 0 ? a.rev : null, profit:a.profit, roas:a.roas, pending:a.costClosed === 0 });
+  }
+  return { from, to, len, rows:rowsF, total, prev, days };
+}
+
+function pageDashboard() {
+  const products = [...new Set(state.creatives.map(c => c.product))].sort();
+  view().innerHTML = `
+  <div class="ph">
+    <div><h1>Dashboard</h1><p class="sub" id="dash-sub"></p></div>
+    <a class="btn" href="#/lancamento">${icon('plus', 16)}Lançar dados do dia</a>
+  </div>
+  <div class="fb" role="group" aria-label="Filtros">
+    <div class="dd" id="dd-period">
+      <button class="ctl dd-btn" type="button" aria-haspopup="true" aria-expanded="false">${icon('cal', 16)}<span id="lbl-period"></span>${icon('chev', 14)}</button>
+      <div class="dd-menu">
+        ${PRESETS.filter(p => p[0] !== 'custom').map(p => `<button type="button" class="dd-item" data-preset="${p[0]}">${p[1]}</button>`).join('')}
+        <div class="dd-sep"></div>
+        <div class="range"><label>De<input type="date" class="in sm" id="f-from"></label><label>Até<input type="date" class="in sm" id="f-to"></label></div>
+      </div>
+    </div>
+    <div class="dd" id="dd-cr">
+      <button class="ctl dd-btn" type="button" aria-haspopup="true" aria-expanded="false"><span class="k">Criativo</span><span id="lbl-cr"></span>${icon('chev', 14)}</button>
+      <div class="dd-menu wide">
+        <div class="dd-search"><input class="in sm" style="width:100%" id="cr-q" placeholder="Buscar criativo…" aria-label="Buscar criativo"></div>
+        <div class="dd-list" id="cr-list">
+          ${state.creatives.map(c => `<label class="dd-opt" data-name="${esc(c.name.toLowerCase())}"><input type="checkbox" value="${c.id}"><span>${esc(c.name)}</span><small>${STATUS[c.status]}</small></label>`).join('')}
+        </div>
+        <div class="dd-foot"><button class="lnk" type="button" id="cr-clear">Limpar seleção</button></div>
+      </div>
+    </div>
+    <label class="ctl"><span class="k">Status</span><select id="f-status"><option value="all">Todos</option>${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="ctl"><span class="k">Produto</span><select id="f-product"><option value="all">Todos</option>${products.map(p => `<option>${esc(p)}</option>`).join('')}</select></label>
+    <label class="ctl"><span class="k">Decisão</span><select id="f-band"><option value="all">Todas</option><option value="good">Escalar</option><option value="ok">Manter</option><option value="warn">Observar</option><option value="bad">Pausar</option></select></label>
+    <button class="lnk" type="button" id="f-clear" hidden>Limpar filtros</button>
+  </div>
+  <div id="dash-res"></div>`;
+
+  const last = state.entries.reduce((m, e) => e.date > m ? e.date : m, '');
+  $('#dash-sub').textContent = `Lançamentos até ${fDate(last)} · ${activeCreatives().length} criativos ativos`;
+
+  $('#dd-period').addEventListener('click', e => {
+    const it = e.target.closest('[data-preset]');
+    if (it) { F.preset = it.dataset.preset; $('#dd-period').classList.remove('open'); updateDashboard(); }
+  });
+  const rangeChange = () => { F.preset = 'custom'; F.from = $('#f-from').value || F.from; F.to = $('#f-to').value || F.to; updateDashboard(); };
+  $('#f-from').addEventListener('change', rangeChange);
+  $('#f-to').addEventListener('change', rangeChange);
+  $('#cr-list').addEventListener('change', e => {
+    const id = +e.target.value;
+    e.target.checked ? F.ids.add(id) : F.ids.delete(id);
+    updateDashboard();
+  });
+  $('#cr-q').addEventListener('input', e => {
+    const q = e.target.value.trim().toLowerCase();
+    $$('#cr-list .dd-opt').forEach(o => o.hidden = q && !o.dataset.name.includes(q));
+  });
+  $('#cr-clear').addEventListener('click', () => { F.ids.clear(); updateDashboard(); });
+  $('#f-status').addEventListener('change', e => { F.status = e.target.value; updateDashboard(); });
+  $('#f-product').addEventListener('change', e => { F.product = e.target.value; updateDashboard(); });
+  $('#f-band').addEventListener('change', e => { F.band = e.target.value; updateDashboard(); });
+  $('#f-clear').addEventListener('click', () => {
+    Object.assign(F, { preset:'30d', ids:new Set(), status:'all', product:'all', band:'all' });
+    updateDashboard();
+  });
+  $('#dash-res').addEventListener('click', e => {
+    const th = e.target.closest('th[data-sort]');
+    if (th) { const k = th.dataset.sort; F.sort = { k, dir: F.sort.k === k ? -F.sort.dir : -1 }; updateDashboard(); return; }
+    const tr = e.target.closest('tr[data-id]');
+    if (tr) location.hash = '#/criativo/' + tr.dataset.id;
+    if (e.target.closest('[data-reset]')) $('#f-clear').click();
+  });
+  updateDashboard();
+}
+
+function updateDashboard() {
+  const d = dashData();
+  $('#lbl-period').innerHTML = `${presetLabel()} <small>${fDay(d.from)} – ${fDate(d.to)}</small>`;
+  $('#f-from').value = d.from; $('#f-to').value = d.to;
+  $$('#dd-period .dd-item').forEach(b => b.classList.toggle('on', b.dataset.preset === F.preset));
+  $$('#cr-list input').forEach(i => i.checked = F.ids.has(+i.value));
+  const one = F.ids.size === 1 ? state.creatives.find(c => F.ids.has(c.id)) : null;
+  $('#lbl-cr').textContent = !F.ids.size ? 'Todos' : one ? one.name : `${F.ids.size} selecionados`;
+  $('#f-status').value = F.status; $('#f-product').value = F.product; $('#f-band').value = F.band;
+  $('#f-clear').hidden = isDefaultFilters();
+  $('#dash-res').innerHTML = resultsHTML(d);
+  if (chartRO) { chartRO.disconnect(); chartRO = null; }
+  const box = $('#chart');
+  if (box) {
+    drawChart(box, d.days);
+    if (window.ResizeObserver) { let w = box.clientWidth; chartRO = new ResizeObserver(() => { if (Math.abs(box.clientWidth - w) > 4) { w = box.clientWidth; drawChart(box, d.days); } }); chartRO.observe(box); }
+  }
+}
+
+function resultsHTML(d) {
+  if (!d.rows.length) {
+    return `<div class="panel"><div class="empty"><strong>Nenhum lançamento encontrado</strong><span>Não há dados neste período com os filtros escolhidos.</span><button class="btn ghost" type="button" data-reset>Limpar filtros</button></div></div>`;
+  }
+  const t = d.total, p = d.prev, s = state.settings;
+  const dec = decisionOf(t);
+  const profCls = t.profit == null ? 'nil' : t.profit >= 0 ? 'good' : 'bad';
+  const cells = [
+    ['Investimento', fBRL(t.invest), `com imposto ${fBRL(t.cost)}`, delta(t.invest, p?.invest)],
+    ['Faturamento', t.costClosed > 0 ? fBRL(t.rev) : '—', t.pendingDays ? `${t.pendingDays} ${t.pendingDays > 1 ? 'dias pendentes' : 'dia pendente'}` : '', delta(t.rev, p?.rev, 'up')],
+    ['Vendas', fN0(t.sales), '', delta(t.sales, p?.sales, 'up')],
+    ['Custo por venda', fBRL(t.cps), 'custo com imposto ÷ vendas', delta(t.cps, p?.cps, 'down')],
+    ['Cliques Meta', fN0(t.clM), '', delta(t.clM, p?.clM)],
+    ['Cliques Shopee', fN0(t.clS), '', delta(t.clS, p?.clS)],
+    ['CPC Meta', fBRL(t.cpcM), 'investimento ÷ cliques', delta(t.cpcM, p?.cpcM, 'down')],
+    ['CPC Shopee', fBRL(t.cpcS), 'investimento ÷ cliques', delta(t.cpcS, p?.cpcS, 'down')]
+  ];
+  const note = t.pendingDays ? `<div class="note">${icon('info', 16)}<span>Faturamento ainda não lançado em ${t.pendingDays} ${t.pendingDays > 1 ? 'dias' : 'dia'} (${fBRL(t.pendingCost)} investidos). Esses dias ficam fora do lucro e do ROAS até você preencher.</span></div>` : '';
+  const sorted = [...d.rows].sort((x, y) => {
+    const g = r => ({ profit:r.a.profit, roas:r.a.roas, cost:r.a.cost, sales:r.a.sales })[F.sort.k];
+    const a = g(x), b = g(y);
+    if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1;
+    return (a - b) * F.sort.dir;
+  });
+  const th = (k, label, cls = '') => `<th class="${cls}" data-sort="${k}" aria-sort="${F.sort.k === k ? (F.sort.dir < 0 ? 'descending' : 'ascending') : 'none'}">${label}${F.sort.k === k ? `<span class="ar">${F.sort.dir < 0 ? '↓' : '↑'}</span>` : ''}</th>`;
+  return `
+  <section class="panel sum" aria-label="Resumo do período">
+    <div class="hero">
+      <div class="lbl">Lucro no período</div>
+      <div class="big ${profCls}">${fBRL(t.profit)}</div>
+      <div class="hero-sub">${delta(t.profit, p?.profit, 'up')}${p ? '<span class="mut">vs período anterior</span>' : ''}</div>
+      <div class="hero-roas">
+        <div class="rrow"><span class="lbl">ROAS</span><strong>${fN2(t.roas)}</strong>${chip(dec)}</div>
+        ${ruler(t.roas, 'wide')}
+        <div class="ticks"><span style="left:25%">${fN2(s.breakeven)}</span><span style="left:50%">${fN2(s.good)}</span><span style="left:75%">${fN2(s.scale)}</span></div>
+      </div>
+      ${note}
+    </div>
+    <div class="mgrid">${cells.map(c => `<div><span class="lbl">${c[0]}</span><span class="v">${c[1]}</span><span class="s">${c[2]}</span>${c[3]}</div>`).join('')}</div>
+  </section>
+  <section class="panel" aria-label="Evolução diária">
+    <div class="panel-h"><h2>Custo × faturamento por dia</h2>
+      <div class="legend"><span><i class="dot ln" style="background:var(--ink-2)"></i>Custo com imposto</span><span><i class="dot ln" style="background:var(--good-seg)"></i>Faturamento</span><span><i class="dot good"></i>Lucro do dia</span><span><i class="dot bad"></i>Prejuízo do dia</span></div>
+    </div>
+    <div class="chart" id="chart"></div>
+  </section>
+  <section class="panel" aria-label="Decisão por criativo">
+    <div class="panel-h"><h2>Decisão por criativo <span class="sub">${d.rows.length} no período</span></h2>
+      <div class="legend"><span><i class="dot bad"></i>Pausar &lt; ${fN2(s.breakeven)}</span><span><i class="dot warn"></i>Observar ${fN2(s.breakeven)}–${fN2(s.good)}</span><span><i class="dot ok"></i>Manter ${fN2(s.good)}–${fN2(s.scale)}</span><span><i class="dot good"></i>Escalar ≥ ${fN2(s.scale)}</span></div>
+    </div>
+    <div class="scroll"><table class="tbl">
+      <thead><tr><th>Criativo</th><th>Status</th>${th('cost', 'Custo c/ imposto', 'num')}<th class="num">Faturamento</th>${th('profit', 'Lucro', 'num')}${th('sales', 'Vendas', 'num')}${th('roas', 'ROAS')}<th>Ação sugerida</th></tr></thead>
+      <tbody>${sorted.map(r => { const a = r.a, c = r.c; const pc = a.profit == null ? '' : a.profit >= 0 ? 'good' : 'bad';
+        return `<tr class="click" data-id="${c.id}" title="Abrir ${esc(c.name)}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product)} · ${FORMAT[c.format]}</div></td><td>${stChip(c.status)}</td><td class="num">${fBRL(a.cost)}</td><td class="num">${a.costClosed > 0 ? fBRL(a.rev) : '—'}</td><td class="num prof ${pc}">${fBRL(a.profit)}</td><td class="num">${fN0(a.sales)}</td><td class="rz"><span class="rv">${fN2(a.roas)}</span>${ruler(a.roas)}</td><td>${chip(r.dec)}</td></tr>`; }).join('')}</tbody>
+    </table></div>
+  </section>`;
+}
+
+/* ---------- gráfico: linhas (custo, faturamento) + barras (lucro do dia) ---------- */
+function niceMax(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const f = v / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+const short = v => Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(v % 1000 ? 1 : 0).replace('.', ',')} mil` : N0.format(v);
+
+function drawChart(el, days) {
+  const W = Math.max(320, el.clientWidth - 20), H = 336;
+  const L = 52, R = 8, T1 = 12, B1 = 190, T2 = 226, B2 = 300, XL = 322;
+  const n = days.length, step = (W - L - R) / n;
+  const x = i => L + step * (i + .5);
+  const real = days.filter(d => !d.empty);
+  const max = niceMax(Math.max(1, ...real.flatMap(d => [d.cost, d.rev || 0])));
+  const y1 = v => B1 - (v / max) * (B1 - T1);
+  const pmax = Math.max(1, ...real.filter(d => d.profit != null).map(d => Math.abs(d.profit)));
+  const mid = (T2 + B2) / 2, y2 = v => mid - (v / pmax) * ((B2 - T2) / 2);
+  const line = get => { let s = '', pen = false; days.forEach((d, i) => { const v = d.empty ? null : get(d); if (v == null) { pen = false; return; } s += `${pen ? 'L' : 'M'}${x(i).toFixed(1)} ${y1(v).toFixed(1)}`; pen = true; }); return s; };
+  let g = '';
+  [0, .5, 1].forEach(f => { const v = max * f, y = y1(v); g += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--line-2)"/><text x="${L - 8}" y="${y + 4}" text-anchor="end">R$ ${short(v)}</text>`; });
+  g += `<line x1="${L}" x2="${W - R}" y1="${mid}" y2="${mid}" stroke="var(--line)"/><text x="${L - 8}" y="${mid + 4}" text-anchor="end">Lucro</text>`;
+  /* faixas de "faturamento pendente" */
+  let i = 0, hatch = '';
+  while (i < n) { if (!days[i].empty && days[i].pending) { let j = i; while (j + 1 < n && !days[j + 1].empty && days[j + 1].pending) j++; const x0 = L + step * i, w = step * (j - i + 1);
+    hatch += `<rect x="${x0}" y="${T1}" width="${w}" height="${B2 - T1}" fill="url(#hatch)"/>${w > 96 ? `<text x="${x0 + w / 2}" y="${T1 + 12}" text-anchor="middle">faturamento pendente</text>` : ''}`; i = j + 1; } else i++; }
+  const bw = Math.max(2, Math.min(22, step * .62));
+  const bars = days.map((d, k) => d.empty || d.profit == null ? '' : `<rect x="${(x(k) - bw / 2).toFixed(1)}" y="${Math.min(mid, y2(d.profit)).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(y2(d.profit) - mid)).toFixed(1)}" rx="2" fill="${d.profit >= 0 ? 'var(--good-seg)' : 'var(--bad-seg)'}"/>`).join('');
+  const stride = Math.max(1, Math.ceil(n / Math.floor((W - L) / 58)));
+  const xl = days.map((d, k) => k % stride === 0 ? `<text x="${x(k).toFixed(1)}" y="${XL}" text-anchor="middle">${fDay(d.date)}</text>` : '').join('');
+  const dots = days.map((d, k) => d.empty || n > 45 ? '' : `<circle cx="${x(k).toFixed(1)}" cy="${y1(d.cost).toFixed(1)}" r="2.2" fill="var(--ink-2)"/>${d.rev != null ? `<circle cx="${x(k).toFixed(1)}" cy="${y1(d.rev).toFixed(1)}" r="2.2" fill="var(--good-seg)"/>` : ''}`).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Gráfico diário de custo, faturamento e lucro">
+    <defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="var(--hatch)" stroke-width="2.2" opacity=".55"/></pattern></defs>
+    ${g}${hatch}${bars}
+    <path d="${line(d => d.cost)}" fill="none" stroke="var(--ink-2)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${line(d => d.rev)}" fill="none" stroke="var(--good-seg)" stroke-width="2.4" stroke-linejoin="round"/>
+    ${dots}${xl}
+    <line id="cur" y1="${T1}" y2="${B2}" stroke="var(--ink)" stroke-dasharray="3 3" opacity="0" />
+    <rect id="hit" x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent"/></svg><div class="tip" hidden></div>`;
+  const tip = $('.tip', el), cur = $('#cur', el), hit = $('#hit', el);
+  const show = ev => {
+    const r = hit.getBoundingClientRect(); const k = Math.max(0, Math.min(n - 1, Math.floor((ev.clientX - r.left) / r.width * n)));
+    const d = days[k]; const cx = x(k);
+    cur.setAttribute('x1', cx); cur.setAttribute('x2', cx); cur.setAttribute('opacity', '.5');
+    tip.innerHTML = d.empty ? `<b>${fDate(d.date)}</b><span class="mut">Sem lançamentos</span>` :
+      `<b>${fDate(d.date)}</b><div><span class="mut">Custo c/ imposto</span><span>${fBRL(d.cost)}</span></div><div><span class="mut">Faturamento</span><span>${d.rev == null ? 'pendente' : fBRL(d.rev)}</span></div><div><span class="mut">Lucro</span><span>${fBRL(d.profit)}</span></div><div><span class="mut">ROAS</span><span>${fN2(d.roas)}</span></div>`;
+    tip.hidden = false;
+    const scale = el.clientWidth / (W + 20), px = (cx * scale) + 10;
+    tip.style.left = (k > n / 2 ? px - tip.offsetWidth - 12 : px + 12) + 'px'; tip.style.top = '14px';
+  };
+  hit.addEventListener('pointermove', show);
+  hit.addEventListener('pointerleave', () => { tip.hidden = true; cur.setAttribute('opacity', '0'); });
+}
+/* =====================================================================
+   CRIATIVOS — biblioteca
+   ===================================================================== */
+const L = { q:'', status:'all', sort:'recent' };
+const safeUrl = u => /^https?:\/\//i.test(u || '') ? u : '';
+function tabsHTML(active) {
+  return `<nav class="tabs" aria-label="Seções de criativos"><a href="#/criativos" ${active === 'lib' ? 'aria-current="page"' : ''}>Biblioteca</a><a href="#/lancamento" ${active === 'day' ? 'aria-current="page"' : ''}>Lançamento diário</a></nav>`;
+}
+function pageLibrary() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Criativos</h1><p class="sub" id="lib-sub"></p></div><a class="btn" href="#/cadastro">${icon('plus', 16)}Cadastrar criativo</a></div>
+  ${tabsHTML('lib')}
+  <div class="fb">
+    <label class="ctl search">${icon('search', 16)}<input id="lib-q" placeholder="Buscar por nome ou produto" aria-label="Buscar criativo" value="${esc(L.q)}"></label>
+    <label class="ctl"><span class="k">Status</span><select id="lib-status"><option value="all">Todos</option>${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+    <label class="ctl"><span class="k">Ordenar</span><select id="lib-sort"><option value="recent">Mais recentes</option><option value="profit">Maior lucro</option><option value="roas">Maior ROAS</option><option value="invest">Maior investimento</option></select></label>
+  </div>
+  <section class="panel"><div class="scroll" id="lib-body"></div></section>`;
+  $('#lib-status').value = L.status; $('#lib-sort').value = L.sort;
+  $('#lib-q').addEventListener('input', e => { L.q = e.target.value; libBody(); });
+  $('#lib-status').addEventListener('change', e => { L.status = e.target.value; libBody(); });
+  $('#lib-sort').addEventListener('change', e => { L.sort = e.target.value; libBody(); });
+  $('#lib-body').addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr) location.hash = '#/criativo/' + tr.dataset.id; });
+  libBody();
+}
+function libBody() {
+  const q = L.q.trim().toLowerCase();
+  const rows = state.creatives.map(c => ({ c, a: agg(entriesOf(c.id)) }))
+    .filter(r => (L.status === 'all' || r.c.status === L.status) && (!q || (r.c.name + ' ' + r.c.product).toLowerCase().includes(q)));
+  const key = { profit:r => r.a.profit, roas:r => r.a.roas, invest:r => r.a.invest };
+  if (L.sort === 'recent') rows.sort((x, y) => y.c.start.localeCompare(x.c.start) || y.c.id - x.c.id);
+  else rows.sort((x, y) => { const a = key[L.sort](x), b = key[L.sort](y); if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1; return b - a; });
+  $('#lib-sub').textContent = `${rows.length} de ${state.creatives.length} criativos`;
+  $('#lib-body').innerHTML = !rows.length
+    ? `<div class="empty"><strong>Nenhum criativo encontrado</strong><span>Tente outra busca ou cadastre um novo criativo.</span><a class="btn" href="#/cadastro">${icon('plus', 16)}Cadastrar criativo</a></div>`
+    : `<table class="tbl"><thead><tr><th>Criativo</th><th>Status</th><th>Início</th><th class="num">Investimento</th><th class="num">Faturamento</th><th class="num">Lucro</th><th>ROAS</th><th>Ação sugerida</th></tr></thead><tbody>${rows.map(({ c, a }) => {
+        const pc = a.profit == null ? '' : a.profit >= 0 ? 'good' : 'bad';
+        return `<tr class="click" data-id="${c.id}" title="Abrir ${esc(c.name)}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product)} · ${FORMAT[c.format]}</div></td><td>${stChip(c.status)}</td><td>${fDate(c.start)}</td><td class="num">${fBRL(a.invest)}</td><td class="num">${a.costClosed > 0 ? fBRL(a.rev) : '—'}</td><td class="num prof ${pc}">${fBRL(a.profit)}</td><td class="rz"><span class="rv">${fN2(a.roas)}</span>${ruler(a.roas)}</td><td>${chip(decisionOf(a))}</td></tr>`; }).join('')}</tbody></table>`;
+}
+
+/* =====================================================================
+   CRIATIVO — planilha diária (o "Cadastro de dados" da planilha antiga)
+   ===================================================================== */
+const DT = { month:'all' };
+function sheetEntries(c) { return entriesOf(c.id).filter(e => DT.month === 'all' || e.date.startsWith(DT.month)).sort((a, b) => b.date.localeCompare(a.date)); }
+function pageDetail(idStr) {
+  const c = state.creatives.find(x => x.id === +idStr);
+  if (!c) { location.hash = '#/criativos'; return; }
+  DT.month = 'all';
+  const link = safeUrl(c.url);
+  view().innerHTML = `
+  <a class="back" href="#/criativos">${icon('back', 16)}Criativos</a>
+  <div class="ph">
+    <div><h1>${esc(c.name)}</h1><p class="sub">${esc(c.product)} · ${FORMAT[c.format]} · início em ${fDate(c.start)}${link ? ` · <a href="${esc(link)}" target="_blank" rel="noopener">abrir criativo</a>` : ''}</p></div>
+    <div class="fb" style="margin:0"><span id="d-chip"></span><label class="ctl"><span class="k">Status</span><select id="d-status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label></div>
+  </div>
+  <section class="panel dsum" id="dsum" aria-label="Resumo do criativo"></section>
+  <section class="panel">
+    <div class="panel-h"><h2>Lançamentos diários</h2><div class="chips" id="d-months"></div>
+      <div class="addday"><input type="date" class="in sm" id="add-date" aria-label="Data do novo lançamento"><button class="btn sm" id="add-btn" type="button">${icon('plus', 14)}Adicionar dia</button></div></div>
+    <div class="sheetbox" id="sheetbox"></div>
+    <div class="foot-note" id="sheet-note"></div>
+  </section>`;
+  $('#d-status').value = c.status;
+  $('#d-status').addEventListener('change', e => { c.status = e.target.value; toast('Status atualizado'); updateBadge(); });
+  const last = entriesOf(c.id).reduce((m, e) => e.date > m ? e.date : m, c.start);
+  const nx = addDays(last, 1); $('#add-date').value = nx > TODAY ? TODAY : nx; $('#add-date').max = TODAY;
+  paintMonths(c);
+  $('#d-months').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (b) { DT.month = b.dataset.m; paintMonths(c); renderSheet(c); } });
+  $('#add-btn').addEventListener('click', () => {
+    const d = $('#add-date').value; if (!d) return;
+    let e = getEntry(c.id, d);
+    if (!e) { e = { cid:c.id, date:d, invest:0, sales:0, rev:null, clM:0, clS:0, tax:state.settings.tax }; state.entries.push(e); toast(`Dia ${fDate(d)} adicionado`); }
+    if (DT.month !== 'all') DT.month = d.slice(0, 7);
+    paintMonths(c); renderSheet(c); updateBadge();
+    const tr = $(`tr[data-date="${d}"]`); if (tr) { tr.scrollIntoView({ block:'nearest' }); $('input', tr).focus(); }
+  });
+  const box = $('#sheetbox');
+  box.addEventListener('input', ev => {
+    const inp = ev.target.closest('input[data-f]'); if (!inp) return;
+    const tr = inp.closest('tr'), e = getEntry(c.id, tr.dataset.date), f = inp.dataset.f, v = parseNum(inp.value);
+    const invalid = Number.isNaN(v) || (v != null && v < 0);
+    inp.classList.toggle('bad', invalid); if (invalid) return;
+    if (f === 'rev') e.rev = v; else if (f === 'invest') e.invest = v ?? 0; else e[f] = Math.round(v ?? 0);
+    paintRow(tr, e); paintTotals(c); paintSummary(c);
+  });
+  box.addEventListener('focusout', ev => {
+    const inp = ev.target.closest('input[data-f]'); if (!inp || inp.classList.contains('bad')) return;
+    const f = inp.dataset.f, v = parseNum(inp.value), money = f === 'invest' || f === 'rev';
+    inp.value = v == null ? (f === 'rev' ? '' : money ? fIn(0) : '0') : money ? fIn(v) : String(Math.round(v));
+  });
+  renderSheet(c);
+}
+function paintMonths(c) {
+  const months = [...new Set(entriesOf(c.id).map(e => e.date.slice(0, 7)))].sort().reverse();
+  $('#d-months').innerHTML = [['all', 'Tudo'], ...months.map(m => [m, monthLabel(m)])].map(([k, l]) => `<button type="button" class="pill" data-m="${k}" aria-pressed="${DT.month === k}">${l}</button>`).join('');
+}
+function rowHTML(e) {
+  const inp = (f, val, mode, ph = '') => `<td><input class="ci" data-f="${f}" inputmode="${mode}" value="${val}" ${ph ? `placeholder="${ph}"` : ''} aria-label="${f} de ${fDate(e.date)}"></td>`;
+  return `<tr data-date="${e.date}">
+    <td class="dt">${fDate(e.date)}<span class="wn" title="Vendas maiores que os cliques da Shopee. Confira este lançamento." hidden>${icon('warn', 15)}</span></td>
+    ${inp('invest', fIn(e.invest), 'decimal')}<td class="calc" data-c="cost"></td>
+    ${inp('sales', e.sales, 'numeric')}${inp('rev', fIn(e.rev), 'decimal', 'pendente')}<td class="calc" data-c="profit"></td>
+    ${inp('clM', e.clM, 'numeric')}${inp('clS', e.clS, 'numeric')}
+    <td class="calc" data-c="cpcM"></td><td class="calc" data-c="cpcS"></td><td class="calc" data-c="roas"></td></tr>`;
+}
+function paintRow(tr, e) {
+  const k = calcRow(e);
+  const set = (n, txt, cls) => { const td = $(`[data-c="${n}"]`, tr); td.textContent = txt; if (cls !== undefined) td.className = 'calc ' + cls; };
+  set('cost', fN2(k.cost)); set('cpcM', fN2(k.cpcM)); set('cpcS', fN2(k.cpcS));
+  set('profit', fN2(k.profit), k.profit == null ? 'nil' : k.profit > 0 ? 'pos' : k.profit < 0 ? 'neg' : '');
+  set('roas', fN2(k.roas), k.roas == null ? 'nil' : 'b-' + bandOf(k.roas));
+  $('.wn', tr).hidden = !(e.clS > 0 && e.sales > e.clS);
+}
+function renderSheet(c) {
+  const es = sheetEntries(c);
+  $('#sheetbox').innerHTML = `<table class="sheet"><thead><tr><th class="l">Data</th><th>Investimento</th><th class="auto">Custo c/ imposto</th><th>Vendas</th><th>Faturamento</th><th class="auto">Lucro</th><th>Cliques Meta</th><th>Cliques Shopee</th><th class="auto">CPC Meta</th><th class="auto">CPC Shopee</th><th class="auto">ROAS</th></tr></thead>
+    <tbody>${es.map(rowHTML).join('')}</tbody>
+    <tfoot><tr><td class="dt">Total</td>${['invest', 'cost', 'sales', 'rev', 'profit', 'clM', 'clS', 'cpcM', 'cpcS', 'roas'].map(k => `<td data-t="${k}"></td>`).join('')}</tr></tfoot></table>`;
+  es.forEach(e => paintRow($(`tr[data-date="${e.date}"]`), e));
+  const s = state.settings;
+  $('#sheet-note').innerHTML = `Colunas em cinza são calculadas. Custo c/ imposto = investimento × (1 + ${N2.format(s.tax * 100)}%) · ROAS = faturamento ÷ custo c/ imposto. Deixe o faturamento vazio até a comissão ser confirmada: o dia fica fora do lucro e do ROAS. Valores em R$.`;
+  paintTotals(c); paintSummary(c);
+}
+function paintTotals(c) {
+  const a = agg(sheetEntries(c));
+  const v = { invest:fN2(a.invest), cost:fN2(a.cost), sales:fN0(a.sales), rev:a.costClosed > 0 ? fN2(a.rev) : '—', profit:fN2(a.profit), clM:fN0(a.clM), clS:fN0(a.clS), cpcM:fN2(a.cpcM), cpcS:fN2(a.cpcS), roas:fN2(a.roas) };
+  Object.entries(v).forEach(([k, t]) => { const td = $(`[data-t="${k}"]`); if (td) td.textContent = t; });
+  const r = $('[data-t="roas"]'); if (r) r.style.color = a.roas == null ? '' : `var(--${bandOf(a.roas)})`;
+  const p = $('[data-t="profit"]'); if (p) p.style.color = a.profit == null ? '' : a.profit >= 0 ? 'var(--good)' : 'var(--bad)';
+}
+function paintSummary(c) {
+  const a = agg(sheetEntries(c)), s = state.settings;
+  const pc = a.profit == null ? '' : a.profit >= 0 ? 'good' : 'bad';
+  $('#d-chip').innerHTML = chip(decisionOf(agg(entriesOf(c.id))));
+  $('#dsum').innerHTML = `
+    <div><span class="lbl">Investimento</span><span class="v">${fBRL(a.invest)}</span></div>
+    <div><span class="lbl">Custo c/ imposto</span><span class="v">${fBRL(a.cost)}</span></div>
+    <div><span class="lbl">Faturamento</span><span class="v">${a.costClosed > 0 ? fBRL(a.rev) : '—'}</span>${a.pendingDays ? `<span class="sub">${a.pendingDays} ${a.pendingDays > 1 ? 'dias pendentes' : 'dia pendente'}</span>` : ''}</div>
+    <div><span class="lbl">Lucro</span><span class="v ${pc}">${fBRL(a.profit)}</span></div>
+    <div><span class="lbl">ROAS</span><span class="v">${fN2(a.roas)}</span>${ruler(a.roas, 'wide')}</div>
+    <div><span class="lbl">Vendas</span><span class="v">${fN0(a.sales)}</span><span class="sub">${a.days} ${a.days === 1 ? 'dia' : 'dias'} lançados</span></div>`;
+}
+
+/* =====================================================================
+   LANÇAMENTO DIÁRIO — um dia, todos os criativos ativos numa tela só
+   ===================================================================== */
+const DY = { date: TODAY };
+function pageDaily() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Criativos</h1><p class="sub">Lance o dia de todos os criativos ativos numa tela só.</p></div><a class="btn" href="#/cadastro">${icon('plus', 16)}Cadastrar criativo</a></div>
+  ${tabsHTML('day')}
+  <div class="daybar">
+    <button class="btn ghost sm" id="dy-prev" type="button" aria-label="Dia anterior">${icon('left', 16)}</button>
+    <input type="date" class="in sm" id="dy-date" max="${TODAY}" aria-label="Data do lançamento">
+    <button class="btn ghost sm" id="dy-next" type="button" aria-label="Próximo dia">${icon('right', 16)}</button>
+    <button class="btn ghost sm" id="dy-today" type="button">Hoje</button>
+    <span class="long" id="dy-long"></span>
+  </div>
+  <section class="panel"><div class="scroll" id="dy-body"></div>
+    <div class="savebar"><span id="dy-count" class="mut"></span><button class="btn" id="dy-save" type="button">${icon('check', 16)}Salvar lançamentos</button></div></section>`;
+  const go = d => { if (!d || d > TODAY) return; DY.date = d; renderDay(); };
+  $('#dy-prev').addEventListener('click', () => go(addDays(DY.date, -1)));
+  $('#dy-next').addEventListener('click', () => go(addDays(DY.date, 1)));
+  $('#dy-today').addEventListener('click', () => go(TODAY));
+  $('#dy-date').addEventListener('change', e => go(e.target.value));
+  $('#dy-save').addEventListener('click', saveDay);
+  const body = $('#dy-body');
+  body.addEventListener('input', ev => { const tr = ev.target.closest('tr[data-cid]'); if (tr) paintDayRow(tr); countDay(); });
+  body.addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter' || !ev.target.matches('input[data-f]')) return;
+    ev.preventDefault();
+    const nxt = ev.target.closest('tr').nextElementSibling;
+    const t = nxt ? $(`input[data-f="${ev.target.dataset.f}"]`, nxt) : null;
+    if (t) { t.focus(); t.select(); } else $('#dy-save').focus();
+  });
+  renderDay();
+}
+function renderDay() {
+  const date = DY.date, cs = activeCreatives();
+  $('#dy-date').value = date; $('#dy-next').disabled = date >= TODAY;
+  const ld = longDate(date); $('#dy-long').textContent = ld.charAt(0).toUpperCase() + ld.slice(1) + (date === TODAY ? ' (hoje)' : '');
+  if (!cs.length) { $('#dy-body').innerHTML = `<div class="empty"><strong>Nenhum criativo ativo</strong><span>Cadastre um criativo ou mude o status de um existente para Testando ou Escalando.</span><a class="btn" href="#/cadastro">Cadastrar criativo</a></div>`; $('#dy-save').disabled = true; $('#dy-count').textContent = ''; return; }
+  const cell = (f, val, mode, ph) => `<td><input class="ci" data-f="${f}" inputmode="${mode}" value="${val}" placeholder="${ph}"></td>`;
+  $('#dy-body').innerHTML = `<table class="tbl daytbl"><thead><tr><th>Criativo</th><th class="num">Investimento (R$)</th><th class="num">Vendas</th><th class="num">Faturamento (R$)</th><th class="num">Cliques Meta</th><th class="num">Cliques Shopee</th><th class="num">Custo c/ imposto</th><th class="num">ROAS</th></tr></thead><tbody>${cs.map(c => {
+    const e = getEntry(c.id, date);
+    return `<tr data-cid="${c.id}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product)}</div></td>
+      ${cell('invest', e ? fIn(e.invest) : '', 'decimal', '0,00')}${cell('sales', e ? e.sales : '', 'numeric', '0')}${cell('rev', e ? fIn(e.rev) : '', 'decimal', 'pendente')}${cell('clM', e ? e.clM : '', 'numeric', '0')}${cell('clS', e ? e.clS : '', 'numeric', '0')}
+      <td class="calc" data-c="cost">—</td><td class="calc" data-c="roas">—</td></tr>`; }).join('')}</tbody></table>`;
+  $$('#dy-body tr[data-cid]').forEach(paintDayRow); countDay();
+}
+function paintDayRow(tr) {
+  const e = getEntry(+tr.dataset.cid, DY.date);
+  const inv = parseNum($('[data-f="invest"]', tr).value), rev = parseNum($('[data-f="rev"]', tr).value);
+  const tax = e ? e.tax : state.settings.tax;
+  const cost = inv == null || Number.isNaN(inv) ? null : inv * (1 + tax);
+  const roas = cost && rev != null && !Number.isNaN(rev) ? rev / cost : null;
+  $('[data-c="cost"]', tr).textContent = fN2(cost);
+  const r = $('[data-c="roas"]', tr); r.textContent = fN2(roas); r.className = 'calc ' + (roas == null ? 'nil' : 'b-' + bandOf(roas));
+}
+const rowFilled = tr => $('[data-f="invest"]', tr).value.trim() !== '';
+function countDay() {
+  const rows = $$('#dy-body tr[data-cid]'), n = rows.filter(rowFilled).length;
+  $('#dy-count').textContent = `${n} de ${rows.length} criativos preenchidos`;
+  $('#dy-save').disabled = n === 0;
+}
+function saveDay() {
+  const rows = $$('#dy-body tr[data-cid]'); const out = []; let bad = null;
+  $$('#dy-body .ci.bad').forEach(i => i.classList.remove('bad'));
+  for (const tr of rows) {
+    const vals = {}; let any = false, invalid = false;
+    $$('input[data-f]', tr).forEach(i => { const v = parseNum(i.value); vals[i.dataset.f] = v; if (i.value.trim() !== '') any = true; if (Number.isNaN(v) || (v != null && v < 0)) { i.classList.add('bad'); invalid = true; } });
+    if (!any) continue;
+    const name = $('.nm', tr).textContent;
+    if (invalid) { bad = bad || `Confira os números de ${name}.`; continue; }
+    if (vals.invest == null) { $('[data-f="invest"]', tr).classList.add('bad'); bad = bad || `Informe o investimento de ${name}.`; continue; }
+    out.push({ cid:+tr.dataset.cid, vals });
+  }
+  if (bad) { toast(bad); return; }
+  out.forEach(({ cid, vals }) => {
+    let e = getEntry(cid, DY.date);
+    if (!e) { e = { cid, date:DY.date, invest:0, sales:0, rev:null, clM:0, clS:0, tax:state.settings.tax }; state.entries.push(e); }
+    e.invest = vals.invest; e.sales = Math.round(vals.sales ?? 0); e.rev = vals.rev; e.clM = Math.round(vals.clM ?? 0); e.clS = Math.round(vals.clS ?? 0);
+  });
+  toast(`${out.length} ${out.length === 1 ? 'lançamento salvo' : 'lançamentos salvos'} em ${fDate(DY.date)}`);
+  updateBadge(); renderDay();
+}
+
+/* =====================================================================
+   CADASTRO — um criativo ou vários de uma vez
+   ===================================================================== */
+const R = { mode:'single', name:'', bulk:'', product:'', format:'video', start:TODAY, status:'testing', url:'', notes:'' };
+const nameTaken = n => state.creatives.some(c => c.name.toLowerCase() === n.toLowerCase());
+function pageRegister() {
+  const products = [...new Set(state.creatives.map(c => c.product))].filter(p => p !== 'Sem produto').sort();
+  const bulk = R.mode === 'bulk';
+  view().innerHTML = `
+  <div class="ph"><div><h1>Cadastro</h1><p class="sub">Registre os criativos que você acabou de criar. Os números de cada dia entram depois, em Lançamento diário.</p></div></div>
+  <div class="cols">
+    <section class="panel"><div class="form">
+      <div class="seg" role="group" aria-label="Modo de cadastro"><button type="button" data-mode="single" aria-pressed="${!bulk}">Um criativo</button><button type="button" data-mode="bulk" aria-pressed="${bulk}">Vários de uma vez</button></div>
+      ${bulk ? `
+      <div class="fld"><label for="r-bulk">Nomes dos criativos</label><textarea class="in" id="r-bulk" rows="6" placeholder="Um nome por linha&#10;Depoimento cozinha 03&#10;UGC achadinho 04">${esc(R.bulk)}</textarea><div class="bulkprev" id="r-prev" aria-live="polite"></div><div class="err-msg" id="r-err" hidden></div></div>` : `
+      <div class="fld"><label for="r-name">Nome do criativo</label><input class="in" id="r-name" placeholder="Ex.: Depoimento cozinha 03" value="${esc(R.name)}" autocomplete="off"><div class="err-msg" id="r-err" hidden></div></div>`}
+      <div class="fld"><label for="r-product">Produto ou oferta</label><input class="in" id="r-product" list="r-products" placeholder="Ex.: Mini processador" value="${esc(R.product)}" autocomplete="off"><datalist id="r-products">${products.map(p => `<option value="${esc(p)}">`).join('')}</datalist></div>
+      <div class="fld"><span class="l">Formato</span><div class="seg" role="group" aria-label="Formato">${Object.entries(FORMAT).map(([k, v]) => `<button type="button" data-format="${k}" aria-pressed="${R.format === k}">${v}</button>`).join('')}</div></div>
+      <div class="two">
+        <div class="fld"><label for="r-start">Data de início</label><input type="date" class="in" id="r-start" value="${R.start}"></div>
+        <div class="fld"><label for="r-status">Status inicial</label><select class="in" id="r-status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${R.status === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+      </div>
+      ${bulk ? '' : `
+      <div class="fld"><label for="r-url">Link do criativo <span class="mut">(opcional)</span></label><input class="in" id="r-url" type="url" placeholder="Pasta do Drive, vídeo ou anúncio" value="${esc(R.url)}"></div>
+      <div class="fld"><label for="r-notes">Observações <span class="mut">(opcional)</span></label><textarea class="in" id="r-notes" placeholder="Gancho, ângulo, público, o que você quer testar…">${esc(R.notes)}</textarea></div>`}
+      <div class="actions"><button class="btn" type="button" id="r-save">${icon('check', 16)}<span id="r-save-l"></span></button><button class="btn ghost" type="button" id="r-save-go">Cadastrar e lançar dados</button></div>
+    </div></section>
+    <section class="panel"><div class="panel-h"><h2>Últimos cadastrados</h2></div>
+      <ul class="recent" id="r-recent"></ul></section>
+  </div>`;
+  const bind = (id, key) => { const el = $(id); if (el) el.addEventListener('input', e => { R[key] = e.target.value; if (key === 'bulk') bulkPreview(); $('#r-err').hidden = true; $$('.in.err').forEach(i => i.classList.remove('err')); }); };
+  bind('#r-name', 'name'); bind('#r-bulk', 'bulk'); bind('#r-product', 'product'); bind('#r-start', 'start'); bind('#r-status', 'status'); bind('#r-url', 'url'); bind('#r-notes', 'notes');
+  $$('[data-mode]').forEach(b => b.addEventListener('click', () => { R.mode = b.dataset.mode; pageRegister(); }));
+  $$('[data-format]').forEach(b => b.addEventListener('click', () => { R.format = b.dataset.format; $$('[data-format]').forEach(x => x.setAttribute('aria-pressed', x === b)); }));
+  $('#r-save').addEventListener('click', () => submit(false));
+  $('#r-save-go').addEventListener('click', () => submit(true));
+  paintRecent(); bulkPreview();
+}
+const bulkNames = () => R.bulk.split('\n').map(s => s.trim()).filter(Boolean);
+function bulkPreview() {
+  const names = R.mode === 'bulk' ? bulkNames() : [];
+  const seen = new Set();
+  const prev = $('#r-prev'); if (prev) prev.innerHTML = names.map(n => { const d = nameTaken(n) || seen.has(n.toLowerCase()); seen.add(n.toLowerCase()); return `<span class="${d ? 'dup' : ''}">${esc(n)}</span>`; }).join('');
+  const n = R.mode === 'bulk' ? names.length : 1;
+  $('#r-save-l').textContent = R.mode === 'bulk' ? (n > 1 ? `Cadastrar ${n} criativos` : 'Cadastrar criativo') : 'Cadastrar criativo';
+}
+function paintRecent() {
+  const last = [...state.creatives].sort((a, b) => b.id - a.id).slice(0, 6);
+  $('#r-recent').innerHTML = last.map(c => `<li><div><a href="#/criativo/${c.id}">${esc(c.name)}</a><div class="sub">${esc(c.product)} · ${FORMAT[c.format]} · ${fDate(c.start)}</div></div>${stChip(c.status)}</li>`).join('');
+}
+function fail(msg, sel) { const e = $('#r-err'); e.textContent = msg; e.hidden = false; const i = $(sel); if (i) { i.classList.add('err'); i.focus(); } }
+function submit(goDaily) {
+  const make = name => { const c = { id:state.nextId++, name, product:R.product.trim() || 'Sem produto', format:R.format, status:R.status, start:R.start || TODAY, url:R.mode === 'single' ? R.url.trim() : '', notes:R.mode === 'single' ? R.notes.trim() : '' }; state.creatives.push(c); return c; };
+  let made = [];
+  if (R.mode === 'single') {
+    const n = R.name.trim();
+    if (!n) return fail('Informe o nome do criativo.', '#r-name');
+    if (nameTaken(n)) return fail('Já existe um criativo com esse nome. Use outro nome para diferenciar.', '#r-name');
+    made = [make(n)]; R.name = ''; R.url = ''; R.notes = '';
+  } else {
+    const names = bulkNames();
+    if (!names.length) return fail('Digite pelo menos um nome, um por linha.', '#r-bulk');
+    const seen = new Set(); const dup = names.filter(n => { const k = n.toLowerCase(); const d = nameTaken(n) || seen.has(k); seen.add(k); return d; });
+    if (dup.length) return fail(`Nomes repetidos ou já cadastrados (em vermelho): ${dup.join(', ')}.`, '#r-bulk');
+    made = names.map(make); R.bulk = '';
+  }
+  toast(made.length === 1 ? `Criativo cadastrado: ${made[0].name}` : `${made.length} criativos cadastrados`);
+  updateBadge();
+  if (goDaily) { DY.date = TODAY; location.hash = '#/lancamento'; } else { pageRegister(); const f = $('#r-name') || $('#r-bulk'); if (f) f.focus(); }
+}
+
+/* =====================================================================
+   CONFIGURAÇÕES
+   ===================================================================== */
+function pageSettings() {
+  const s = state.settings;
+  view().innerHTML = `
+  <div class="ph"><div><h1>Configurações</h1><p class="sub">Os números usados nos cálculos e nas decisões.</p></div></div>
+  <div class="cols">
+    <section class="panel"><div class="panel-h"><h2>Cálculos</h2></div><div class="form">
+      <div class="fld"><label for="s-tax">Imposto sobre o investimento</label><div class="suffix"><input class="in" id="s-tax" inputmode="decimal" value="${fIn(s.tax * 100)}"><em>%</em></div>
+        <span class="hint">Custo com imposto = investimento × (1 + imposto). Lançamentos já feitos mantêm a taxa da época.</span>
+        <div class="actions"><button class="btn ghost sm" type="button" id="s-apply">Aplicar a todos os lançamentos antigos</button></div></div>
+      <div class="fld"><span class="l">Faixas de ROAS</span>
+        <div class="set-grid">
+          <div class="fld"><label for="s-be">Ponto de equilíbrio</label><input class="in" id="s-be" value="${fN2(s.breakeven)}" disabled><span class="hint">ROAS 1,00 = lucro zero.</span></div>
+          <div class="fld"><label for="s-good">Manter a partir de</label><input class="in" id="s-good" inputmode="decimal" value="${fN2(s.good)}"></div>
+          <div class="fld"><label for="s-scale">Escalar a partir de</label><input class="in" id="s-scale" inputmode="decimal" value="${fN2(s.scale)}"></div>
+          <div class="fld"><label for="s-min">Investimento mínimo (R$)</label><input class="in" id="s-min" inputmode="decimal" value="${fN2(s.minSpend)}"><span class="hint">Abaixo disso, o criativo aparece como “Coletando dados”.</span></div>
+        </div>
+        <div class="err-msg" id="s-err" hidden></div>
+        <div id="s-prev" style="margin-top:6px"></div></div>
+    </div></section>
+    <section class="panel"><div class="panel-h"><h2>Dados e backup</h2></div><div class="form">
+      <p>Seus dados ficam em um único arquivo neste computador: <strong>dados/gestor.db</strong>.</p>
+      <p class="hint">Uma cópia de segurança é criada por dia, ao abrir o sistema (as últimas 30 ficam guardadas em dados/backups).</p>
+      <div class="actions">
+        <button class="btn ghost sm" type="button" data-fake="Backup criado em dados/backups">Fazer backup agora</button>
+        <button class="btn ghost sm" type="button" data-fake="Planilha exportada">Exportar planilha (.xlsx)</button>
+        <button class="btn ghost sm" type="button" data-fake="Importação de planilha antiga">Importar planilha antiga</button>
+      </div>
+      <p class="hint">Neste protótipo os botões acima não fazem nada de verdade.</p>
+    </div></section>
+  </div>`;
+  const prev = () => { const t = state.settings; $('#s-prev').innerHTML = `<div class="ticks" style="margin-bottom:4px"><span style="left:25%">${fN2(t.breakeven)}</span><span style="left:50%">${fN2(t.good)}</span><span style="left:75%">${fN2(t.scale)}</span></div><span class="ruler wide"><i></i><i></i><i></i><i></i></span><div class="legend" style="margin-top:8px"><span><i class="dot bad"></i>Pausar</span><span><i class="dot warn"></i>Observar</span><span><i class="dot ok"></i>Manter</span><span><i class="dot good"></i>Escalar</span></div>`; };
+  const err = m => { const e = $('#s-err'); e.textContent = m || ''; e.hidden = !m; };
+  $('#s-tax').addEventListener('change', e => { const v = parseNum(e.target.value); if (v == null || Number.isNaN(v) || v < 0 || v > 100) { e.target.classList.add('err'); return; } e.target.classList.remove('err'); state.settings.tax = v / 100; e.target.value = fIn(v); toast('Imposto atualizado para novos lançamentos'); });
+  $('#s-apply').addEventListener('click', () => { state.entries.forEach(e => e.tax = state.settings.tax); toast('Taxa aplicada a todos os lançamentos'); });
+  const thr = (id, key, ok) => $(id).addEventListener('change', e => {
+    const v = parseNum(e.target.value); const t = state.settings;
+    if (v == null || Number.isNaN(v) || v < 0 || !ok(v, t)) { e.target.classList.add('err'); err(key === 'minSpend' ? 'Informe um valor válido.' : 'Os limites precisam crescer: equilíbrio < manter < escalar.'); return; }
+    e.target.classList.remove('err'); err(''); t[key] = v; e.target.value = fN2(v); prev(); toast('Faixas atualizadas');
+  });
+  thr('#s-good', 'good', (v, t) => v > t.breakeven && v < t.scale);
+  thr('#s-scale', 'scale', (v, t) => v > t.good);
+  thr('#s-min', 'minSpend', () => true);
+  $$('[data-fake]').forEach(b => b.addEventListener('click', () => toast(b.dataset.fake + ' (só no sistema real)')));
+  prev();
+}
+
+/* =====================================================================
+   ROTEADOR, TEMA, TOAST
+   ===================================================================== */
+const ROUTES = [
+  [/^#\/dashboard$/, pageDashboard, 'dash'], [/^#\/criativos$/, pageLibrary, 'crea'], [/^#\/lancamento$/, pageDaily, 'crea'],
+  [/^#\/criativo\/(\d+)$/, pageDetail, 'crea'], [/^#\/cadastro$/, pageRegister, 'reg'], [/^#\/config$/, pageSettings, 'cfg']
+];
+function route() {
+  const h = location.hash || '#/dashboard';
+  if (chartRO) { chartRO.disconnect(); chartRO = null; }
+  for (const [re, fn, nav] of ROUTES) {
+    const m = h.match(re);
+    if (m) { $$('#nav a').forEach(a => a.toggleAttribute('aria-current', a.dataset.nav === nav)); $$('#nav a[aria-current]').forEach(a => a.setAttribute('aria-current', 'page')); fn(...m.slice(1)); window.scrollTo(0, 0); updateBadge(); return; }
+  }
+  location.hash = '#/dashboard';
+}
+function updateBadge() {
+  const n = activeCreatives().filter(c => !getEntry(c.id, TODAY)).length, b = $('#badge');
+  b.hidden = !n; b.textContent = n; b.title = `${n} criativos ativos sem lançamento hoje`;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2800); }
+const isDark = () => { const t = document.documentElement.dataset.theme; return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; };
+function paintTheme() { $('#theme').innerHTML = isDark() ? `${icon('sun', 16)}Tema claro` : `${icon('moon', 16)}Tema escuro`; }
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.dd-btn');
+  $$('.dd.open').forEach(d => { if (!d.contains(e.target)) d.classList.remove('open'); });
+  if (btn) { const dd = btn.closest('.dd'), open = !dd.classList.contains('open'); dd.classList.toggle('open', open); btn.setAttribute('aria-expanded', open); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.dd.open').forEach(d => d.classList.remove('open')); });
+(function init() {
+  try { const s = localStorage.getItem('gt-theme'); if (s) document.documentElement.dataset.theme = s; } catch (e) { /* sem storage: segue o tema do sistema */ }
+  seed();
+  $$('[data-ic]').forEach(el => el.outerHTML = icon(el.dataset.ic));
+  $('#theme').addEventListener('click', () => { const next = isDark() ? 'light' : 'dark'; document.documentElement.dataset.theme = next; try { localStorage.setItem('gt-theme', next); } catch (e) { /* ignora */ } paintTheme(); });
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintTheme); } catch (e) { /* navegador antigo */ }
+  paintTheme();
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>

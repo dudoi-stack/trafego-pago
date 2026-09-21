@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- PROTÓTIPO DESCARTÁVEL — ticket #5. Não é produção. Duplo clique para abrir. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>[PROTÓTIPO] Sinal e cores v2 — descarte</title>
+<style>
+:root{
+  --font: "Figtree",system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --bg:#EBEFED; --surface:#FFFFFF; --ink:#16201C; --ink-2:#3A4843; --muted:#647570;
+  --line:#D8DFDC;
+  --good:#0B8A4C; --good-bg:#D9F2E4; --good-seg:#2FBF7A;
+  --ok:#0E76B8;   --ok-bg:#D8ECF9;   --ok-seg:#3AA6E6;
+  --warn:#8A5F00; --warn-bg:#F6E8BE; --warn-seg:#E2AE1F;
+  --bad:#B72929;  --bad-bg:#F8DADA;  --bad-seg:#E5595B;
+  --wait:#5D6D68; --wait-bg:#E3E9E6;
+}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14px/1.45 var(--font);padding:24px}
+.wrap{max-width:1080px;margin:0 auto}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-weight:600;padding:8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.chip{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap}
+.chip.good{background:var(--good-bg);color:var(--good)}
+.chip.ok{background:var(--ok-bg);color:var(--ok)}
+.chip.warn{background:var(--warn-bg);color:var(--warn)}
+.chip.bad{background:var(--bad-bg);color:var(--bad)}
+.chip.wait{background:var(--wait-bg);color:var(--wait)}
+.ruler{position:relative;display:inline-grid;grid-template-columns:repeat(4,1fr);gap:2px;width:132px;height:10px;vertical-align:middle}
+.ruler i{border-radius:2px}
+.ruler i:nth-child(1){background:var(--bad-seg)}
+.ruler i:nth-child(2){background:var(--warn-seg)}
+.ruler i:nth-child(3){background:var(--ok-seg)}
+.ruler i:nth-child(4){background:var(--good-seg)}
+.ruler b{position:absolute;top:-5px;bottom:-5px;width:4px;margin-left:-2px;border-radius:2px;background:var(--ink)}
+.info{color:var(--ink-2);font-size:12px}
+.note{background:var(--wait-bg);border-radius:9px;padding:8px 12px;font-size:12px;color:var(--ink-2);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h1>[PROTÓTIPO v2] Régua de saúde + status + motivo</h1>
+    <p class="sub">Descartável — vale o que você reagir, não o código. Régua em vermelho|amarelo|azul|verde; marcador = saúde do dia.</p>
+  </div>
+  <div class="panel">
+    <table>
+      <thead><tr><th>Criativo</th><th class="num">Lucro</th><th>Saúde do dia</th><th>Status</th><th>Motivo</th></tr></thead>
+      <tbody>
+        <tr><td><b>009 — gancho preço</b><div class="sub">Produto X · vídeo</div></td><td class="num">R$ 42,10</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:62%"></b></span></td><td><span class="chip ok">Saudável</span></td><td class="info">—</td></tr>
+        <tr><td><b>010 — antes/depois</b><div class="sub">Produto X · vídeo</div></td><td class="num">−R$ 6,30</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:37%"></b></span></td><td><span class="chip warn">Atenção</span></td><td class="info">CPC Meta 0,14</td></tr>
+        <tr><td><b>004 — review sincero</b><div class="sub">Produto Y · vídeo</div></td><td class="num">R$ 118,70</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:87%"></b></span></td><td><span class="chip good">Escalando</span></td><td class="info">—</td></tr>
+        <tr><td><b>007 — unboxing</b><div class="sub">Produto Y · vídeo</div></td><td class="num">R$ 31,20</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:37%"></b></span></td><td><span class="chip good">Escalando</span></td><td class="info">sem venda no dia — marcador no amarelo, status segue Escalando</td></tr>
+        <tr><td><b>002 — comparativo</b><div class="sub">Produto X · carrossel</div></td><td class="num">R$ 8,90</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:12%"></b></span></td><td><span class="chip bad">Pausado</span></td><td class="info">ainda recebe vendas (cookie)</td></tr>
+        <tr><td><b>001 — primeiro teste</b><div class="sub">Produto X · imagem</div></td><td class="num">−R$ 12,00</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:12%"></b></span></td><td><span class="chip bad">Encerrado</span></td><td class="info">histórico · sem lançamentos</td></tr>
+        <tr><td><b>011 — trend som</b><div class="sub">Produto Z · vídeo</div></td><td class="num">pendente</td><td><span class="ruler"><i></i><i></i><i></i><i></i><b style="left:62%"></b></span></td><td><span class="chip ok">Saudável</span></td><td class="info">vendeu · preencher faturamento</td></tr>
+      </tbody>
+    </table>
+    <div class="note">Linha 007 em confirmação: marcador acompanha a saúde calculada (amarelo) enquanto o status segue Escalando — ou o marcador deveria ficar no verde e só o Motivo avisar?</div>
+  </div>
+</div>
+</body>
+</html>
