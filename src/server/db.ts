@@ -2,9 +2,10 @@ import { Database } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import initSql from "./migrations/001_init.sql" with { type: "text" };
+import domainSql from "./migrations/002_domain.sql" with { type: "text" };
 import { dbPathFor } from "./paths.ts";
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /** Abre (criando) o SQLite fora do binário e aplica migrações.
  * Requer que o chamador tenha criado o diretório (ver `ensureDataDir`,
@@ -38,5 +39,9 @@ function applyMigrations(db: Database): void {
   if (!applied.has(1)) {
     db.exec(initSql);
     db.query("INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (1, datetime('now','localtime'));").run();
+  }
+  if (!applied.has(2)) {
+    db.exec(domainSql);
+    db.query("INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (2, datetime('now','localtime'));").run();
   }
 }
