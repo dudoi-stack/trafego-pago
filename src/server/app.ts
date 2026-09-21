@@ -1,7 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION } from "./assets.ts";
-import { createCreative, getCreative, listCreatives } from "./creatives.ts";
+import { createCreative, createCreativesBulk, getCreative, listCreatives } from "./creatives.ts";
+import { getDay, saveDayBulk, saveOneEntry } from "./entries.ts";
+import { isValidDate } from "../shared/calc.ts";
 
 export interface StartServerOptions {
   host?: string;
@@ -72,6 +74,16 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
         });
         return Response.json({ data, warnings: [] });
       }
+      if (url.pathname === "/api/creatives/bulk" && req.method === "POST") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const result = createCreativesBulk(db, (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
       if (url.pathname === "/api/creatives" && req.method === "POST") {
         let body: unknown;
         try {
@@ -87,6 +99,36 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
         const item = getCreative(db, Number(detail[1]));
         if (!item) return Response.json({ error: "not_found" }, { status: 404 });
         return Response.json({ data: item, warnings: [] });
+      }
+      const entryUpsert = url.pathname.match(/^\/api\/creatives\/(\d+)\/entries\/(\d{4}-\d{2}-\d{2})$/);
+      if (entryUpsert && req.method === "PUT") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const result = saveOneEntry(db, Number(entryUpsert[1]), entryUpsert[2], (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      if (url.pathname === "/api/entries" && req.method === "GET") {
+        const date = url.searchParams.get("date") ?? "";
+        if (!isValidDate(date)) {
+          return Response.json({ error: "data_invalida", warnings: [] }, { status: 400 });
+        }
+        const data = getDay(db, date);
+        return Response.json({ date, data, warnings: [] });
+      }
+      if (url.pathname === "/api/entries/bulk" && req.method === "POST") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const rec = (body ?? {}) as Record<string, unknown>;
+        const result = saveDayBulk(db, typeof rec.date === "string" ? rec.date : "", rec.entries);
+        return Response.json(result.body, { status: result.statusCode });
       }
       if ((url.pathname === "/" || url.pathname === "/index.html") && req.method === "GET") {
         return new Response(INDEX_HTML, {
