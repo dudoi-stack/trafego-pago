@@ -48,6 +48,7 @@ export interface CreativeWithTotals extends CreativeRow {
     clicks_shopee: number;
     cpc_meta_cents: number | null;
     cpc_shopee_cents: number | null;
+    roas_equivalente: number | null;
     pending_days: number;
     has_pending: boolean;
   };
@@ -109,6 +110,7 @@ function withTotals(db: Database, row: CreativeRow): CreativeWithTotals {
       clicks_shopee: a.clicks_shopee,
       cpc_meta_cents: a.cpc_meta_cents,
       cpc_shopee_cents: a.cpc_shopee_cents,
+      roas_equivalente: a.roas_equivalente,
       pending_days: a.pending_days,
       has_pending: a.has_pending,
     },
@@ -127,18 +129,38 @@ export interface ListFilter {
   q?: string;
   status?: string;
   product?: string;
+  sort?: string;
+  order?: string;
+}
+
+export type LibrarySort = "recent" | "name" | "profit" | "roas" | "cost" | "sales";
+
+function cmpNullable(a: number | null, b: number | null, dir: 1 | -1): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return (a - b) * dir;
 }
 
 export function listCreatives(db: Database, filter: ListFilter = {}): CreativeWithTotals[] {
   const q = filter.q?.trim().toLowerCase() ?? "";
   const status = filter.status?.trim() ?? "all";
   const product = filter.product?.trim() ?? "";
+  const sortRaw = (filter.sort?.trim() ?? "recent").toLowerCase();
+  const sort: LibrarySort =
+    sortRaw === "name" || sortRaw === "profit" || sortRaw === "roas" || sortRaw === "cost" || sortRaw === "sales"
+      ? (sortRaw as LibrarySort)
+      : "recent";
+  const orderRaw = (filter.order?.trim() ?? "").toLowerCase();
+  // Ordem padrão: nome A–Z; demais métricas do maior para o menor.
+  const dir: 1 | -1 =
+    orderRaw === "asc" ? 1 : orderRaw === "desc" ? -1 : sort === "name" ? 1 : -1;
 
   const rows = db
     .query("SELECT id, name, product, format, status, start_date, url, notes, created_at FROM creatives ORDER BY start_date DESC, id DESC;")
     .all() as CreativeRow[];
 
-  return rows
+  const items = rows
     .filter((r) => {
       if (status !== "all" && status !== "" && r.status !== status) return false;
       if (product !== "" && r.product !== product) return false;
@@ -146,6 +168,29 @@ export function listCreatives(db: Database, filter: ListFilter = {}): CreativeWi
       return true;
     })
     .map((r) => withTotals(db, r));
+
+  switch (sort) {
+    case "name":
+      items.sort((a, b) => a.name.localeCompare(b.name, "pt-BR") * dir);
+      break;
+    case "profit":
+      items.sort((a, b) => cmpNullable(a.totals.profit_cents, b.totals.profit_cents, dir));
+      break;
+    case "roas":
+      items.sort((a, b) => cmpNullable(a.totals.roas_equivalente, b.totals.roas_equivalente, dir));
+      break;
+    case "cost":
+      items.sort((a, b) => (a.totals.cost_cents - b.totals.cost_cents) * dir);
+      break;
+    case "sales":
+      items.sort((a, b) => (a.totals.sales - b.totals.sales) * dir);
+      break;
+    case "recent":
+    default:
+      items.sort((a, b) => (a.start_date.localeCompare(b.start_date) || a.id - b.id) * dir);
+      break;
+  }
+  return items;
 }
 
 export function getCreative(db: Database, id: number): CreativeWithTotals | null {
@@ -285,6 +330,7 @@ export function getCreativeDetail(
         clicks_shopee: a.clicks_shopee,
         cpc_meta_cents: a.cpc_meta_cents,
         cpc_shopee_cents: a.cpc_shopee_cents,
+        roas_equivalente: a.roas_equivalente,
         pending_days: a.pending_days,
         has_pending: a.has_pending,
       },
