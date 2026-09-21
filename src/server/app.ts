@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION } from "./assets.ts";
-import { createCreative, createCreativesBulk, getCreative, listCreatives } from "./creatives.ts";
-import { getDay, saveDayBulk, saveOneEntry } from "./entries.ts";
+import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
+import { getDay, pendingWarning, saveDayBulk, saveOneEntry } from "./entries.ts";
 import { isValidDate } from "../shared/calc.ts";
 
 export interface StartServerOptions {
@@ -99,6 +99,28 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
         const item = getCreative(db, Number(detail[1]));
         if (!item) return Response.json({ error: "not_found" }, { status: 404 });
         return Response.json({ data: item, warnings: [] });
+      }
+      if (detail && (req.method === "PATCH" || req.method === "PUT")) {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const result = updateCreative(db, Number(detail[1]), (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      const detailEntries = url.pathname.match(/^\/api\/creatives\/(\d+)\/entries$/);
+      if (detailEntries && req.method === "GET") {
+        const month = url.searchParams.get("month") ?? undefined;
+        const result = getCreativeDetail(db, Number(detailEntries[1]), month ?? undefined);
+        if (!result.ok) {
+          const code = result.error === "not_found" ? 404 : 400;
+          return Response.json({ error: result.error, warnings: [] }, { status: code });
+        }
+        const pend = result.detail.entries.filter((e) => e.is_pending).length;
+        const w = pend > 0 ? pendingWarning(pend) : null;
+        return Response.json({ data: result.detail, warnings: w ? [w] : [] });
       }
       const entryUpsert = url.pathname.match(/^\/api\/creatives\/(\d+)\/entries\/(\d{4}-\d{2}-\d{2})$/);
       if (entryUpsert && req.method === "PUT") {

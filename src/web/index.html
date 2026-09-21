@@ -77,6 +77,25 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
 .bulkprev span.dup{border-color:var(--bad);color:var(--bad)}
 .warnbox{display:flex;gap:8px;align-items:flex-start;margin:0 18px 12px;font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:9px;padding:9px 10px}
 .scroll{overflow:auto;max-width:100%}
+.panel-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid #E8EDEB}
+.panel-h h2{margin:0;font-size:17px}
+.pill{height:30px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:#F4F7F6;cursor:pointer;font-weight:600;font-size:12.5px}
+.pill[aria-pressed="true"]{background:var(--btn);color:var(--btn-ink);border-color:var(--btn)}
+.sheet{width:100%;border-collapse:collapse;min-width:980px}
+.sheet th{font-size:12px;color:var(--muted);text-align:right;padding:10px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.sheet th.l,.sheet td.dt{text-align:left}
+.sheet td{padding:6px 8px;border-bottom:1px solid #E8EDEB;vertical-align:middle}
+.sheet td.calc{background:#F4F7F6;text-align:right;white-space:nowrap;padding:0 10px;font-variant-numeric:tabular-nums}
+.sheet td.calc.nil{color:var(--muted);font-style:italic}
+.sheet tfoot td{position:sticky;bottom:0;background:var(--surface);border-top:2px solid var(--ink);font-weight:800;text-align:right;white-space:nowrap;padding:12px 10px}
+.sheet tfoot td.dt{text-align:left}
+.sheet td.dt{white-space:nowrap;font-weight:700}
+.sheet .dia1{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;color:var(--ok);background:var(--ok-bg);border-radius:99px;padding:1px 8px}
+.foot-note{padding:12px 18px;color:var(--muted);font-size:12.5px}
+.d-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.addday{display:flex;gap:8px;align-items:center;margin-left:auto}
+.in.sm{height:34px;width:auto}
+.btn.sm{height:32px;padding:0 10px;font-size:13px}
 </style>
 </head>
 <body>
@@ -271,17 +290,221 @@ async function submitRegister(goDaily, err) {
   }
 }
 
-// ---------- Detalhe mínimo (réplica-da-planilha chega no T4) ----------
+// ---------- Detalhe réplica-da-planilha (T4) ----------
+// Colunas digitáveis (brancas): Investimento, Vendas, Faturamento, Cliques Meta/Shopee.
+// Colunas calculadas (cinza, via Calc): Custo, Lucro, CPCs. TOTAL fixo no rodapé = agg().
+// Filtro por mês, adicionar dia (upsert por data), ciclo de vida + régua/Status/Motivo.
+const DT = { id: null, month: "all", creative: null, entries: [], months: [], dia1: null, health: null };
+const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${mo}/${y.slice(2)}`; };
 async function pageDetail(id) {
+  DT.id = id; DT.month = "all"; DT.creative = null; DT.entries = [];
+  view().innerHTML = `<div class="panel-b mut">Carregando…</div>`;
   try {
-    const { data: c } = await api("/api/creatives/" + id);
-    const pc = profitClass(c.totals.profit_cents);
-    view().innerHTML = `
-    <a href="#/criativos" style="color:var(--muted);text-decoration:none">← Criativos</a>
-    <div class="ph"><div><h1>${esc(c.name)}</h1><p class="sub">${esc(c.product||"—")} · ${FORMAT[c.format]} · início em ${fDate(c.start_date)}</p></div><div>${chipFor(c.health)}</div></div>
-    <section class="panel"><div class="panel-b" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${rulerFor(c.health)}<span><strong class="prof ${pc}">${fBRL(c.totals.profit_cents)}</strong> <span class="mut">lucro · ${fBRL(c.totals.investment_cents)} investidos · ${c.totals.sales} vendas</span></span><span class="mut">${esc(c.health.motivo ?? (c.health.dia1 ? "—" : "Pré-cadastro: sem Dia 1, sem Sinal até ter movimento."))}</span></div></section>
-    <section class="panel"><div class="panel-b"><strong>Lançamentos diários</strong><p class="sub">A planilha editável (TOTAL, filtro por mês, adicionar dia) chega no T4.</p><div class="actions"><a class="btn ghost" href="#/lancamento">Ir para lançamento</a></div></div></section>`;
+    await loadDetail();
   } catch { location.hash = "#/criativos"; }
+}
+async function loadDetail() {
+  const id = DT.id;
+  const qs = DT.month !== "all" ? "?month=" + encodeURIComponent(DT.month) : "";
+  const [{ data: c }, det] = await Promise.all([
+    api("/api/creatives/" + id),
+    api("/api/creatives/" + id + "/entries" + qs),
+  ]);
+  DT.creative = det.data.creative;
+  DT.entries = det.data.entries;
+  DT.months = det.data.months;
+  DT.dia1 = det.data.dia1;
+  DT.health = det.data.health;
+  renderDetail(c.data, det);
+}
+function renderDetail(c, det) {
+  const h = det.data.health;
+  const pc = profitClass(det.data.totals.profit_cents);
+  const encerrado = DT.creative.status === "encerrado";
+  const st = DT.creative.status;
+  const actions =
+    st === "ativo" ? `<button class="btn ghost sm" data-act="escalando" type="button">Escalar</button><button class="btn ghost sm" data-act="pausado" type="button">Pausar</button><button class="btn ghost sm" data-act="encerrado" type="button">Encerrar</button>`
+    : st === "escalando" ? `<button class="btn ghost sm" data-act="ativo" type="button">Desmarcar escala</button><button class="btn ghost sm" data-act="pausado" type="button">Pausar</button><button class="btn ghost sm" data-act="encerrado" type="button">Encerrar</button>`
+    : st === "pausado" ? `<button class="btn sm" data-act="ativo" type="button">Reabrir</button><button class="btn ghost sm" data-act="encerrado" type="button">Encerrar</button>`
+    : `<button class="btn sm" data-act="ativo" type="button">Reabrir</button>`;
+  const t = det.data.totals;
+  const profitLabel = t.profit_cents == null ? (t.has_pending ? "pendente" : "—") : fBRL(t.profit_cents);
+  view().innerHTML = `
+  <a href="#/criativos" style="color:var(--muted);text-decoration:none">← Criativos</a>
+  <div class="ph"><div><h1>${esc(DT.creative.name)}</h1><p class="sub">${esc(DT.creative.product || "—")} · ${FORMAT[DT.creative.format]} · início em ${fDate(DT.creative.start_date)}</p></div><div class="d-actions">${chipFor(h)}${actions}</div></div>
+  <section class="panel"><div class="panel-b" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${rulerFor(h)}<span><strong class="prof ${pc}">${esc(profitLabel)}</strong> <span class="mut">lucro · ${fBRL(t.investment_cents)} investidos · ${t.sales} vendas</span></span><span class="mut">${esc(h.motivo ?? (h.dia1 ? "—" : "Pré-cadastro: sem Dia 1, sem Sinal até ter movimento."))}</span></div>
+  ${det.warnings?.length ? `<div class="warnbox">${esc(det.warnings.join(" "))}</div>` : ``}</section>
+  <section class="panel">
+    <div class="panel-h"><h2>Lançamentos diários</h2><div id="d-months" style="display:flex;gap:6px;flex-wrap:wrap">${[["all", "Tudo"], ...DT.months.map((m) => [m, monthLabel(m)])].map(([k, l]) => `<button type="button" class="pill" data-m="${k}" aria-pressed="${DT.month === k}">${l}</button>`).join("")}</div>
+    <div class="addday"><input type="date" class="in sm" id="add-date" aria-label="Data do novo lançamento" ${encerrado ? "disabled" : ""}><button class="btn sm" id="add-btn" type="button" ${encerrado ? "disabled" : ""}>+ Adicionar dia</button></div></div>
+    <div class="scroll" id="sheetbox"></div>
+    <div class="foot-note">Colunas em cinza são calculadas (Custo = investimento × (1 + imposto) · Lucro = faturamento − custo · CPC = investimento ÷ cliques). Deixe o faturamento vazio até a comissão ser confirmada: o dia fica pendente, fora do lucro. Valores em R$. ${encerrado ? "Encerrado: histórico, sem lançamentos — reabra para lançar." : ""}</div>
+  </section>`;
+  $("#d-months").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-m]");
+    if (!b) return;
+    DT.month = b.dataset.m;
+    loadDetail();
+  });
+  view().querySelector(".d-actions").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-act]");
+    if (!b) return;
+    try {
+      await api("/api/creatives/" + DT.id, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: b.dataset.act }) });
+      toast(b.dataset.act === "escalando" ? "Marcado como Escalando" : b.dataset.act === "ativo" ? (st === "encerrado" || st === "pausado" ? "Criativo reaberto" : "Escala desmarcada") : b.dataset.act === "pausado" ? "Criativo pausado — ainda recebe vendas (cookie)" : "Criativo encerrado — fica no histórico");
+      await loadDetail();
+    } catch (err) {
+      toast(err.body?.error === "escalando_so_do_ativo" ? "Só criativos Ativos podem ser Escalando." : "Não foi possível atualizar o status.");
+    }
+  });
+  const last = DT.entries.length ? DT.entries[0].date : DT.creative.start_date;
+  const addInput = $("#add-date");
+  if (addInput && !encerrado) {
+    addInput.value = last;
+    addInput.max = todayLocal();
+    $("#add-btn").addEventListener("click", async () => {
+      const d = addInput.value;
+      if (!d) return;
+      if (DT.entries.some((e) => e.date === d)) {
+        const tr = view().querySelector(`tr[data-date="${d}"]`);
+        if (tr) { tr.scrollIntoView({ block: "nearest" }); const i = tr.querySelector("input"); if (i) i.focus(); }
+        return;
+      }
+      try {
+        await api(`/api/creatives/${DT.id}/entries/${d}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ investment_cents: 0, sales: 0, revenue_cents: null, clicks_meta: 0, clicks_shopee: 0 }) });
+        if (DT.month !== "all") DT.month = d.slice(0, 7);
+        toast(`Dia ${fDate(d)} adicionado`);
+        await loadDetail();
+      } catch (err) {
+        toast(err.body?.error === "encerrado_sem_lancamento" ? "Criativo encerrado não recebe lançamentos." : "Não foi possível adicionar o dia.");
+      }
+    });
+  }
+  renderSheet();
+  const box = $("#sheetbox");
+  box.addEventListener("input", (ev) => {
+    const inp = ev.target.closest("input[data-f]");
+    if (!inp) return;
+    paintDetailRow(inp.closest("tr"));
+    paintDetailTotals();
+  });
+  box.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || !ev.target.matches("input[data-f]")) return;
+    ev.preventDefault();
+    ev.target.blur();
+  });
+  box.addEventListener("focusout", async (ev) => {
+    const inp = ev.target.closest("input[data-f]");
+    if (!inp) return;
+    const tr = inp.closest("tr");
+    if (inp.classList.contains("bad")) return;
+    await saveDetailRow(tr);
+  });
+}
+function detailEntryFromRow(tr) {
+  const tax = Number(tr.dataset.tax || 0.1386);
+  const date = tr.dataset.date;
+  const inv = Calc.parseMoedaParaCentavos($('[data-f="invest"]', tr).value);
+  const rev = Calc.parseMoedaParaCentavos($('[data-f="rev"]', tr).value);
+  const sales = Calc.parseInteiro($('[data-f="sales"]', tr).value);
+  const clM = Calc.parseInteiro($('[data-f="clM"]', tr).value);
+  const clS = Calc.parseInteiro($('[data-f="clS"]', tr).value);
+  return { tax, date, inv, rev, sales, clM, clS };
+}
+function paintDetailRow(tr) {
+  const { tax, date, inv, rev, sales, clM, clS } = detailEntryFromRow(tr);
+  const bad =
+    [inv, sales, clM, clS].some((v) => typeof v === "number" && Number.isNaN(v)) ||
+    (rev != null && Number.isNaN(rev));
+  ["invest", "sales", "rev", "clM", "clS"].forEach((f) => $('[data-f="' + f + '"]', tr).classList.remove("bad"));
+  if (bad) return;
+  const invC = inv == null ? 0 : inv;
+  const salesN = sales == null ? 0 : sales;
+  const clMN = clM == null ? 0 : clM;
+  const clSN = clS == null ? 0 : clS;
+  const row = Calc.calcRow({ date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax });
+  $('[data-c="cost"]', tr).textContent = Calc.formatBRL(row.cost_cents);
+  const pEl = $('[data-c="profit"]', tr);
+  pEl.textContent = row.is_pending ? "pendente" : Calc.formatBRL(row.profit_cents);
+  pEl.className = "calc" + (row.profit_cents == null || row.is_pending ? " nil" : row.profit_cents >= 0 ? " prof good" : " prof bad");
+  $('[data-c="cpcM"]', tr).textContent = Calc.formatCPC(row.cpc_meta_cents);
+  $('[data-c="cpcS"]', tr).textContent = Calc.formatCPC(row.cpc_shopee_cents);
+  const hEl = $('[data-c="health"]', tr);
+  const dayForSignal = { date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax };
+  // Módulo único: dia sem movimento nunca tem sinal (igual ao servidor).
+  if (!Calc.hasMovement(dayForSignal)) { hEl.textContent = "—"; return; }
+  try {
+    // Ao-vivo: data anterior ao Dia 1 salvo vira o novo Dia 1 após salvar (<=);
+    // sem Dia 1 salvo, o primeiro dia com movimento é o Dia 1.
+    const isDia1 = !DT.dia1 || date <= DT.dia1;
+    const sig = Calc.evaluateDay(dayForSignal, isDia1);
+    hEl.textContent = sig.saude === "atencao" ? `Atenção · ${sig.motivo ?? ""}` : (sig.motivo ?? "Saudável");
+  } catch { hEl.textContent = "—"; }
+}
+function paintDetailTotals() {
+  const rows = $$("#sheetbox tr[data-date]");
+  const days = [];
+  for (const tr of rows) {
+    const { tax, date, inv, rev, sales, clM, clS } = detailEntryFromRow(tr);
+    if ([inv, sales, clM, clS].some((v) => typeof v === "number" && Number.isNaN(v))) continue;
+    days.push({ date, investment_cents: inv ?? 0, sales: sales ?? 0, revenue_cents: rev, clicks_meta: clM ?? 0, clicks_shopee: clS ?? 0, tax_rate: tax });
+  }
+  const a = Calc.agg(days);
+  const set = (k, txt, cls) => { const td = view().querySelector(`[data-t="${k}"]`); if (td) { td.textContent = txt; if (cls) td.className = cls; } };
+  set("invest", Calc.formatBRL(a.investment_cents));
+  set("cost", Calc.formatBRL(a.cost_cents));
+  set("sales", String(a.sales));
+  set("rev", a.costClosed_cents > 0 || a.revenue_cents > 0 ? Calc.formatBRL(a.revenue_cents) : "—");
+  set("profit", a.profit_cents == null ? (a.has_pending ? "pendente" : "—") : Calc.formatBRL(a.profit_cents));
+  set("clM", String(a.clicks_meta));
+  set("clS", String(a.clicks_shopee));
+  set("cpcM", Calc.formatCPC(a.cpc_meta_cents));
+  set("cpcS", Calc.formatCPC(a.cpc_shopee_cents));
+}
+function renderSheet() {
+  const box = $("#sheetbox");
+  const encerrado = DT.creative.status === "encerrado";
+  if (!DT.entries.length) {
+    box.innerHTML = `<div class="empty"><strong>Nenhum lançamento${DT.month !== "all" ? " neste mês" : " ainda"}</strong><span>${encerrado ? "Criativo encerrado: histórico, sem lançamentos." : "Adicione o primeiro dia acima ou lance pelo Lançamento diário."}</span></div>`;
+    return;
+  }
+  box.innerHTML = `<table class="sheet"><thead><tr><th class="l">Data</th><th>Investimento</th><th>Custo c/ imposto</th><th>Vendas</th><th>Faturamento</th><th>Lucro</th><th>Cliques Meta</th><th>Cliques Shopee</th><th>CPC Meta</th><th>CPC Shopee</th><th class="l">Saúde do dia</th></tr></thead><tbody>${DT.entries.map((e) => {
+    const dis = encerrado ? "disabled" : "";
+    return `<tr data-date="${e.date}" data-tax="${e.tax_rate}"><td class="dt">${fDate(e.date)}${e.is_dia1 ? `<span class="dia1">Dia 1</span>` : ``}</td>`
+      + `<td><input class="ci" data-f="invest" inputmode="decimal" value="${esc(e.investment_cents ? fmtInputCents(e.investment_cents) : "")}" placeholder="0,00" ${dis}></td>`
+      + `<td class="calc" data-c="cost">—</td>`
+      + `<td><input class="ci" data-f="sales" inputmode="numeric" value="${esc(e.sales ? String(e.sales) : "")}" placeholder="0" ${dis}></td>`
+      + `<td><input class="ci" data-f="rev" inputmode="decimal" value="${esc(e.revenue_cents != null ? fmtInputCents(e.revenue_cents) : "")}" placeholder="pendente" ${dis}></td>`
+      + `<td class="calc" data-c="profit">—</td>`
+      + `<td><input class="ci" data-f="clM" inputmode="numeric" value="${esc(e.clicks_meta ? String(e.clicks_meta) : "")}" placeholder="0" ${dis}></td>`
+      + `<td><input class="ci" data-f="clS" inputmode="numeric" value="${esc(e.clicks_shopee ? String(e.clicks_shopee) : "")}" placeholder="0" ${dis}></td>`
+      + `<td class="calc" data-c="cpcM">—</td><td class="calc" data-c="cpcS">—</td>`
+      + `<td class="mut" data-c="health" style="white-space:normal;min-width:140px">—</td></tr>`;
+  }).join("")}</tbody><tfoot><tr><td class="dt">TOTAL</td><td data-t="invest"></td><td data-t="cost"></td><td data-t="sales"></td><td data-t="rev"></td><td data-t="profit"></td><td data-t="clM"></td><td data-t="clS"></td><td data-t="cpcM"></td><td data-t="cpcS"></td><td></td></tr></tfoot></table>`;
+  $$("#sheetbox tr[data-date]").forEach(paintDetailRow);
+  paintDetailTotals();
+}
+async function saveDetailRow(tr) {
+  const date = tr.dataset.date;
+  const { inv, rev, sales, clM, clS } = detailEntryFromRow(tr);
+  const name = DT.creative.name;
+  let bad = false;
+  const mark = (f) => { $('[data-f="' + f + '"]', tr).classList.add("bad"); bad = true; };
+  for (const [f, v] of [["invest", inv], ["sales", sales], ["rev", rev], ["clM", clM], ["clS", clS]]) {
+    if (typeof v === "number" && Number.isNaN(v)) mark(f);
+    if (typeof v === "number" && v != null && v < 0) mark(f);
+  }
+  for (const [f, v] of [["sales", sales], ["clM", clM], ["clS", clS]]) {
+    if (typeof v === "number" && v != null && !Number.isInteger(v)) mark(f);
+  }
+  if (bad) { toast(`Confira os números de ${name} em ${fDate(date)}.`); return; }
+  try {
+    await api(`/api/creatives/${DT.id}/entries/${date}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ investment_cents: inv ?? 0, sales: sales ?? 0, revenue_cents: rev, clicks_meta: clM ?? 0, clicks_shopee: clS ?? 0 }) });
+    toast(`Dia ${fDate(date)} salvo`);
+    await loadDetail();
+  } catch (err) {
+    toast(err.body?.error === "encerrado_sem_lancamento" ? "Criativo encerrado não recebe lançamentos." : "Não foi possível salvar. Confira os números.");
+  }
 }
 // ---------- Lançamento diário em lote (T3) ----------
 // Um dia, todos os Ativos numa tabela só. Tudo recalcula ao digitar via Calc.
@@ -387,10 +610,11 @@ function paintDayRow(tr) {
   $('[data-c="cpcM"]', tr).textContent = Calc.formatCPC(cpcM);
   $('[data-c="cpcS"]', tr).textContent = Calc.formatCPC(cpcS);
   const hEl = $('[data-c="health"]', tr);
-  if (bad || (invC === 0 && salesN === 0 && clMN === 0 && clSN === 0 && rev == null)) { hEl.textContent = "—"; return; }
+  const dayForSignal = { date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax };
+  if (bad || !Calc.hasMovement(dayForSignal)) { hEl.textContent = "—"; return; }
   try {
     const isDia1 = !dia1 || date <= dia1;
-    const sig = Calc.evaluateDay({ date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax }, isDia1);
+    const sig = Calc.evaluateDay(dayForSignal, isDia1);
     hEl.textContent = sig.saude === "atencao" ? `Atenção · ${sig.motivo ?? ""}` : (sig.motivo ?? "Saudável");
   } catch { hEl.textContent = "—"; }
 }
