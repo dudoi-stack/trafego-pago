@@ -41,6 +41,9 @@ export interface Agg {
   profit_cents: number | null;
   cpc_meta_cents: number | null;
   cpc_shopee_cents: number | null;
+  /** ROAS-equivalente = faturamento ÷ custo fechado (null sem custo fechado).
+   *  Só ordenação/comparação — nunca decide cor (a decisão é o Sinal). */
+  roas_equivalente: number | null;
   pending_days: number;
   pending_cost_cents: number;
   has_pending: boolean;
@@ -126,6 +129,9 @@ export function agg(entries: DayEntry[]): Agg {
   // Com dias de zero-venda+vazio, costClosed > 0 e lucro = 0 − custo (prejuízo real).
   const hasClosed = costClosed_cents > 0 || revenue_cents > 0;
   const profit_cents = hasClosed ? revenue_cents - costClosed_cents : entries.length > 0 && !has_pending ? revenue_cents - costClosed_cents : null;
+  // ROAS-equivalente: Σ faturamento ÷ Σ custo fechado (nunca média diária).
+  // Null sem custo fechado (a tela mostra "—"). Não decide cor.
+  const roas_equivalente = costClosed_cents > 0 ? revenue_cents / costClosed_cents : null;
 
   return {
     investment_cents,
@@ -138,6 +144,7 @@ export function agg(entries: DayEntry[]): Agg {
     profit_cents,
     cpc_meta_cents: clicks_meta > 0 ? investment_cents / clicks_meta : null,
     cpc_shopee_cents: clicks_shopee > 0 ? investment_cents / clicks_shopee : null,
+    roas_equivalente,
     pending_days,
     pending_cost_cents,
     has_pending,
@@ -225,32 +232,43 @@ export function evaluateDay(
  *   no marcador da régua (amarelo) + motivo, sem tirar o Escalando.
  */
 export function evaluateCreative(status: CreativeStatus, entries: DayEntry[]): CreativeHealth {
+  // Fonte única do Sinal: biblioteca = período total com Dia 1 global.
+  return healthForPeriod(status, findDia1(entries), entries);
+}
+
+/**
+ * Saúde no período do dashboard: mesmo Sinal, mas escopo do período.
+ * - Usa o Dia 1 GLOBAL (para não redefinir Dia 1 a cada filtro).
+ * - Avalia o dia com movimento mais recente DENTRO do período.
+ * - Sem movimento no período → Sem dados (cinza), salvo Pausado/Encerrado (vermelho).
+ */
+export function healthForPeriod(
+  status: CreativeStatus,
+  globalDia1: string | null,
+  periodEntries: DayEntry[],
+): CreativeHealth {
   if (status === "pausado") {
-    return { saude: null, statusDisplay: "Pausado", ruler: "vermelho", motivo: "ainda recebe vendas (cookie)", dia1: findDia1(entries) };
+    return { saude: null, statusDisplay: "Pausado", ruler: "vermelho", motivo: "ainda recebe vendas (cookie)", dia1: globalDia1 };
   }
   if (status === "encerrado") {
-    return { saude: null, statusDisplay: "Encerrado", ruler: "vermelho", motivo: "histórico · sem lançamentos", dia1: findDia1(entries) };
+    return { saude: null, statusDisplay: "Encerrado", ruler: "vermelho", motivo: "histórico · sem lançamentos", dia1: globalDia1 };
   }
-  const dia1 = findDia1(entries);
-  if (dia1 == null) {
-    return {
-      saude: null,
-      statusDisplay: "Sem dados",
-      ruler: "cinza",
-      motivo: null,
-      dia1: null,
-    };
+  if (globalDia1 == null) {
+    return { saude: null, statusDisplay: "Sem dados", ruler: "cinza", motivo: null, dia1: null };
   }
-  const withMovement = entries.filter(hasMovement).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const withMovement = periodEntries.filter(hasMovement).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (withMovement.length === 0) {
+    return { saude: null, statusDisplay: "Sem dados", ruler: "cinza", motivo: null, dia1: globalDia1 };
+  }
   const latest = withMovement[withMovement.length - 1];
-  const sig = evaluateDay(latest, latest.date === dia1);
+  const sig = evaluateDay(latest, latest.date === globalDia1);
   if (status === "escalando") {
     return {
       saude: sig.saude,
       statusDisplay: "Escalando",
       ruler: sig.saude === "atencao" ? "amarelo" : "verde",
       motivo: sig.motivo,
-      dia1,
+      dia1: globalDia1,
     };
   }
   return {
@@ -258,11 +276,16 @@ export function evaluateCreative(status: CreativeStatus, entries: DayEntry[]): C
     statusDisplay: sig.saude === "atencao" ? "Atenção" : "Saudável",
     ruler: sig.saude === "atencao" ? "amarelo" : "azul",
     motivo: sig.motivo,
-    dia1,
+    dia1: globalDia1,
   };
 }
 
 // ---------- Formato brasileiro (a tela mostra "—" no nulo) ----------
+
+export function formatRoas(n: number | null): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
 
 export function formatBRL(cents: number | null): string {
   if (cents == null || !Number.isFinite(cents)) return "—";

@@ -96,6 +96,24 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
 .addday{display:flex;gap:8px;align-items:center;margin-left:auto}
 .in.sm{height:34px;width:auto}
 .btn.sm{height:32px;padding:0 10px;font-size:13px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi .lbl{font-size:12px;color:var(--muted);font-weight:700}
+.kpi .big{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi .big.good{color:var(--good)}.kpi .big.bad{color:var(--bad)}
+.kpi .sub2{font-size:12px;color:var(--muted)}
+.dl{font-size:12px;font-weight:800}.dl.g{color:var(--good)}.dl.b{color:var(--bad)}.dl.n{color:var(--muted)}
+.chart{width:100%;height:220px;display:block}
+.dd{position:relative}
+.dd-menu{display:none;position:absolute;top:42px;left:0;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.dd.open .dd-menu{display:block}
+.dd-item{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:8px;cursor:pointer}
+.dd-item:hover{background:#F4F7F6}.dd-item.on{font-weight:800;background:#F4F7F6}
+.dd-list{max-height:220px;overflow:auto;display:grid;gap:2px;margin:6px 0}
+.dd-opt{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:8px;font-size:13px}
+.dd-opt small{color:var(--muted);margin-left:auto}
+.lnk{border:0;background:transparent;color:var(--ok);font-weight:700;cursor:pointer}
+th[data-sort]{cursor:pointer;user-select:none}.ar{margin-left:4px}
 </style>
 </head>
 <body>
@@ -103,9 +121,11 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
   <aside class="side">
     <div class="brand">Gestor de Tráfego</div>
     <nav class="nav" aria-label="Principal">
+      <a href="#/dashboard" data-nav="dashboard">Dashboard</a>
       <a href="#/criativos" data-nav="criativos">Criativos</a>
       <a href="#/cadastro" data-nav="cadastro">Cadastro</a>
       <a href="#/lancamento" data-nav="lancamento">Lançamento</a>
+      <a href="#/config" data-nav="config">Config</a>
     </nav>
   </aside>
   <main class="main"><div class="wrap" id="view"></div></main>
@@ -144,15 +164,16 @@ async function api(path, opts) {
   return body;
 }
 
-// ---------- Biblioteca ----------
+// ---------- Biblioteca (T5: busca + status + ordenação lucro/ROAS/custo/vendas) ----------
 const L = { q: "", status: "all", sort: "recent" };
+const fRoas = (n) => Calc.formatRoas(n);
 async function pageLibrary() {
   view().innerHTML = `
-  <div class="ph"><div><h1>Criativos</h1><p class="sub" id="lib-sub">Biblioteca mínima — T2</p></div><a class="btn" href="#/cadastro">+ Cadastrar criativo</a></div>
+  <div class="ph"><div><h1>Criativos</h1><p class="sub" id="lib-sub">Biblioteca — busque, filtre e compare</p></div><a class="btn" href="#/cadastro">+ Cadastrar criativo</a></div>
   <div class="fb">
     <label class="ctl search"><input id="lib-q" placeholder="Buscar por nome ou produto" value="${esc(L.q)}" aria-label="Buscar criativo"></label>
     <label class="ctl">Status <select id="lib-status"><option value="all">Todos</option>${Object.entries(STATUS).map(([k,v]) => `<option value="${k}">${v}</option>`).join("")}</select></label>
-    <label class="ctl">Ordenar <select id="lib-sort"><option value="recent">Mais recentes</option><option value="name">Nome A–Z</option><option value="profit">Maior lucro</option></select></label>
+    <label class="ctl">Ordenar <select id="lib-sort"><option value="recent">Mais recentes</option><option value="name">Nome A–Z</option><option value="profit">Maior lucro</option><option value="roas">Maior ROAS-equiv.</option><option value="cost">Maior custo</option><option value="sales">Mais vendas</option></select></label>
   </div>
   <section class="panel"><div class="panel-b" id="lib-body">Carregando…</div></section>`;
   $("#lib-status").value = L.status; $("#lib-sort").value = L.sort;
@@ -168,17 +189,17 @@ async function libBody() {
     const qs = new URLSearchParams();
     if (L.q.trim()) qs.set("q", L.q.trim());
     if (L.status !== "all") qs.set("status", L.status);
+    // Ordenação no servidor (contrato ?sort=profit|roas|cost|sales|name|recent).
+    if (L.sort && L.sort !== "recent") qs.set("sort", L.sort);
     const { data } = await api("/api/creatives?" + qs.toString());
-    let rows = [...data];
-    if (L.sort === "name") rows.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-    else if (L.sort === "profit") rows.sort((a, b) => (b.totals.profit_cents ?? -Infinity) - (a.totals.profit_cents ?? -Infinity));
-    else rows.sort((a, b) => b.start_date.localeCompare(a.start_date) || b.id - a.id);
+    const rows = [...data];
     $("#lib-sub").textContent = `${rows.length} criativo(s) na biblioteca`;
     if (!rows.length) { box.innerHTML = `<div class="empty"><strong>Nenhum criativo encontrado</strong><span>Tente outra busca ou cadastre um novo.</span><a class="btn" href="#/cadastro">Cadastrar criativo</a></div>`; return; }
-    box.innerHTML = `<div style="overflow:auto"><table class="tbl"><thead><tr><th>Criativo</th><th>Status</th><th>Início</th><th class="num">Investimento</th><th class="num">Lucro</th><th>Saúde do dia</th><th>Motivo</th></tr></thead><tbody>${rows.map((c) => {
+    box.innerHTML = `<div style="overflow:auto"><table class="tbl"><thead><tr><th>Criativo</th><th>Status</th><th class="num">Custo</th><th class="num">Vendas</th><th class="num">ROAS-equiv.</th><th class="num">Lucro</th><th>Saúde do dia</th><th>Motivo</th></tr></thead><tbody>${rows.map((c) => {
       const pc = profitClass(c.totals.profit_cents);
-      return `<tr class="click" data-id="${c.id}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product || "—")} · ${FORMAT[c.format] ?? c.format}</div></td><td>${chipFor(c.health)}</td><td>${fDate(c.start_date)}</td><td class="num">${fBRL(c.totals.investment_cents)}</td><td class="num prof ${pc}">${fBRL(c.totals.profit_cents)}</td><td>${rulerFor(c.health)}</td><td class="mut">${esc(c.health.motivo ?? "—")}</td></tr>`;
-    }).join("")}</tbody></table></div>`;
+      const roas = c.totals.roas_equivalente;
+      return `<tr class="click" data-id="${c.id}"><td><div class="nm">${esc(c.name)}</div><div class="sub">${esc(c.product || "—")} · ${FORMAT[c.format] ?? c.format} · ${fDate(c.start_date)}</div></td><td>${chipFor(c.health)}</td><td class="num">${fBRL(c.totals.cost_cents)}</td><td class="num">${c.totals.sales}</td><td class="num">${roas == null ? "—" : fRoas(roas)}</td><td class="num prof ${pc}">${c.totals.profit_cents == null ? (c.totals.has_pending ? "pendente" : "—") : fBRL(c.totals.profit_cents)}</td><td>${rulerFor(c.health)}</td><td class="mut">${esc(c.health.motivo ?? "—")}</td></tr>`;
+    }).join("")}</tbody></table></div><div class="foot-note">ROAS-equiv. = faturamento ÷ custo c/ imposto (só comparação — a cor vem do Sinal). Lucro “pendente” = vendeu e o faturamento ainda não foi lançado.</div>`;
   } catch { box.innerHTML = `<div class="empty"><strong>Não foi possível carregar</strong></div>`; }
 }
 
@@ -664,13 +685,256 @@ async function saveDay() {
   }
 }
 
+// ---------- Dashboard de decisão (T5) ----------
+// Filtros: período, Criativos, status, produto, decisão. Resumo com variação
+// contra o período anterior + aviso de pendentes. Gráfico diário SVG
+// (custo, faturamento, lucro/prejuízo, faixa nos dias pendentes).
+// Tabela de decisão ordenável com clique abrindo o detalhe.
+const D = { preset: "30d", from: "", to: "", ids: new Set(), status: "all", product: "all", decision: "all", sort: { k: "profit", dir: -1 }, data: null, products: [] };
+const PRESETS = [["today","Hoje"],["yesterday","Ontem"],["7d","Últimos 7 dias"],["14d","Últimos 14 dias"],["30d","Últimos 30 dias"],["month","Este mês"],["lastmonth","Mês passado"],["all","Todo o período"],["custom","Personalizado"]];
+function dAddDays(iso, n) { const [y,m,d] = iso.split("-").map(Number); return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10); }
+function dPresetRange() {
+  const t = todayLocal();
+  switch (D.preset) {
+    case "today": return [t, t];
+    case "yesterday": return [dAddDays(t,-1), dAddDays(t,-1)];
+    case "7d": return [dAddDays(t,-6), t];
+    case "14d": return [dAddDays(t,-13), t];
+    case "30d": return [dAddDays(t,-29), t];
+    case "month": return [t.slice(0,8)+"01", t];
+    case "lastmonth": { const first = t.slice(0,8)+"01"; const [y,m] = first.split("-").map(Number); const prev = new Date(Date.UTC(y,m-2,1)); const pf = prev.toISOString().slice(0,10); return [pf.slice(0,8)+"01", dAddDays(first,-1)]; }
+    case "all": return [null, null];
+    default: return [D.from || t, D.to || t];
+  }
+}
+function deltaHtml(cur, prev, invert) {
+  if (cur == null || prev == null) return "";
+  if (prev === 0) return cur === 0 ? '<span class="dl n">= estável</span>' : "";
+  const p = (cur - prev) / Math.abs(prev) * 100;
+  if (Math.abs(p) < 0.5) return '<span class="dl n">= estável</span>';
+  const up = p > 0;
+  const good = invert ? !up : up;
+  return `<span class="dl ${good ? "g" : "b"}">${up ? "▲" : "▼"} ${Math.abs(p).toLocaleString("pt-BR",{maximumFractionDigits:0})}%</span>`;
+}
+async function pageDashboard() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Dashboard</h1><p class="sub" id="dash-sub">Decida olhando o painel</p></div><a class="btn" href="#/lancamento">Lançar dados do dia</a></div>
+  <div class="fb" role="group" aria-label="Filtros do dashboard">
+    <div class="dd" id="dd-period"><button class="ctl" type="button" id="dd-period-btn" aria-haspopup="true">📅 <span id="lbl-period">Período</span></button>
+      <div class="dd-menu" id="dd-period-menu">${PRESETS.filter((p)=>p[0]!=="custom").map((p)=>`<button type="button" class="dd-item" data-preset="${p[0]}">${p[1]}</button>`).join("")}<div style="display:flex;gap:6px;margin-top:6px"><label>De <input type="date" class="in sm" id="f-from"></label><label>Até <input type="date" class="in sm" id="f-to"></label></div></div></div>
+    <div class="dd" id="dd-cr"><button class="ctl" type="button">Criativo: <span id="lbl-cr">Todos</span></button>
+      <div class="dd-menu" style="min-width:280px"><input class="in sm" style="width:100%" id="cr-q" placeholder="Buscar criativo…" aria-label="Buscar criativo"><div class="dd-list" id="cr-list"></div><div><button class="lnk" type="button" id="cr-clear">Limpar seleção</button></div></div></div>
+    <label class="ctl">Status <select id="f-status"><option value="all">Todos</option>${Object.entries(STATUS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></label>
+    <label class="ctl">Produto <select id="f-product"><option value="all">Todos</option></select></label>
+    <label class="ctl">Decisão <select id="f-dec"><option value="all">Todas</option><option value="saudavel">Saudável</option><option value="atencao">Atenção</option><option value="escalando">Escalando</option><option value="pausado">Pausado</option><option value="encerrado">Encerrado</option><option value="sem_dados">Sem dados</option></select></label>
+    <button class="lnk" type="button" id="f-clear" hidden>Limpar filtros</button>
+  </div>
+  <div id="dash-res"><div class="panel"><div class="panel-b mut">Carregando…</div></div></div>`;
+  try {
+    const { data } = await api("/api/creatives?sort=name");
+    D.products = [...new Set(data.map((c)=>c.product).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
+    const sel = $("#f-product");
+    sel.innerHTML = `<option value="all">Todos</option>` + D.products.map((p)=>`<option>${esc(p)}</option>`).join("");
+    sel.value = D.product;
+    const list = $("#cr-list");
+    list.innerHTML = data.map((c)=>`<label class="dd-opt" data-name="${esc(c.name.toLowerCase())}"><input type="checkbox" value="${c.id}" ${D.ids.has(c.id)?"checked":""}><span>${esc(c.name)}</span><small>${STATUS[c.status]??c.status}</small></label>`).join("");
+  } catch {}
+  $("#f-status").value = D.status; $("#f-dec").value = D.decision;
+  const btn = $("#dd-period-btn");
+  btn.addEventListener("click", () => $("#dd-period").classList.toggle("open"));
+  $("#dd-period-menu").addEventListener("click", (e) => { const it = e.target.closest("[data-preset]"); if (!it) return; D.preset = it.dataset.preset; $("#dd-period").classList.remove("open"); loadDashboard(); });
+  const range = () => { D.preset = "custom"; D.from = $("#f-from").value; D.to = $("#f-to").value; loadDashboard(); };
+  $("#f-from").addEventListener("change", range); $("#f-to").addEventListener("change", range);
+  const crBtn = $("#dd-cr .ctl");
+  crBtn.addEventListener("click", () => $("#dd-cr").classList.toggle("open"));
+  $("#cr-list").addEventListener("change", (e) => { const id = Number(e.target.value); if (e.target.checked) D.ids.add(id); else D.ids.delete(id); loadDashboard(); });
+  $("#cr-q").addEventListener("input", (e) => { const q = e.target.value.trim().toLowerCase(); $$("#cr-list .dd-opt").forEach((o)=>{ o.hidden = q && !o.dataset.name.includes(q); }); });
+  $("#cr-clear").addEventListener("click", () => { D.ids.clear(); loadDashboard(); });
+  $("#f-status").addEventListener("change", (e) => { D.status = e.target.value; loadDashboard(); });
+  $("#f-product").addEventListener("change", (e) => { D.product = e.target.value; loadDashboard(); });
+  $("#f-dec").addEventListener("change", (e) => { D.decision = e.target.value; loadDashboard(); });
+  $("#f-clear").addEventListener("click", () => { Object.assign(D, { preset:"30d", from:"", to:"", status:"all", product:"all", decision:"all" }); D.ids.clear(); D.sort = { k:"profit", dir:-1 }; pageDashboard(); });
+  $("#dash-res").addEventListener("click", (e) => {
+    const th = e.target.closest("th[data-sort]");
+    if (th) { const k = th.dataset.sort; D.sort = { k, dir: D.sort.k === k ? -D.sort.dir : -1 }; renderDashTable(); return; }
+    const tr = e.target.closest("tr[data-id]");
+    if (tr) location.hash = "#/criativo/" + tr.dataset.id;
+    if (e.target.closest("[data-reset]")) $("#f-clear").click();
+  });
+  document.addEventListener("click", (e) => { if (!e.target.closest(".dd")) $$(".dd.open").forEach((d)=>d.classList.remove("open")); }, { once: true });
+  await loadDashboard();
+}
+async function loadDashboard() {
+  const box = $("#dash-res");
+  try {
+    const [from, to] = dPresetRange();
+    const qs = new URLSearchParams();
+    if (D.preset === "all") qs.set("all", "1");
+    else { qs.set("from", from); qs.set("to", to); }
+    if (D.ids.size) qs.set("creatives", [...D.ids].join(","));
+    if (D.status !== "all") qs.set("status", D.status);
+    if (D.product !== "all") qs.set("product", D.product);
+    if (D.decision !== "all") qs.set("decision", D.decision);
+    const { data, warnings } = await api("/api/dashboard?" + qs.toString());
+    D.data = { ...data, warnings };
+    if (D.preset !== "all") { $("#f-from").value = data.period.from; $("#f-to").value = data.period.to; D.from = data.period.from; D.to = data.period.to; }
+    const lbl = PRESETS.find((p)=>p[0]===D.preset);
+    $("#lbl-period").textContent = D.preset === "all" ? "Todo o período" : `${lbl ? lbl[1] : "Personalizado"} · ${fDate(data.period.from)}–${fDate(data.period.to)}`;
+    $("#lbl-cr").textContent = !D.ids.size ? "Todos" : D.ids.size === 1 ? (data.creatives.find((c)=>D.ids.has(c.creative.id))?.creative.name ?? "1 selecionado") : `${D.ids.size} selecionados`;
+    $("#f-clear").hidden = D.preset === "30d" && !D.ids.size && D.status === "all" && D.product === "all" && D.decision === "all";
+    renderDashboard();
+  } catch {
+    if (box) box.innerHTML = `<div class="panel"><div class="empty"><strong>Não foi possível carregar o dashboard</strong></div></div>`;
+  }
+}
+function renderDashboard() {
+  const d = D.data;
+  if (!d) return;
+  if (!d.creatives.length) {
+    $("#dash-res").innerHTML = `<div class="panel"><div class="empty"><strong>Nenhum lançamento encontrado</strong><span>Não há dados neste período com os filtros escolhidos.</span><button class="btn ghost" type="button" data-reset>Limpar filtros</button></div></div>`;
+    return;
+  }
+  const t = d.totals, p = d.previousTotals;
+  const profCls = t.profit_cents == null ? "" : t.profit_cents >= 0 ? "good" : "bad";
+  const kpi = (lbl, big, sub, dl) => `<div class="kpi"><div class="lbl">${lbl}</div><div class="big ${profCls && lbl.includes("Lucro") ? profCls : ""}">${big}</div><div class="sub2">${sub} ${dl ?? ""}</div></div>`;
+  const pendNote = t.has_pending ? `<div class="warnbox">⚠ ${esc((d.warnings||[]).join(" ") || `${t.pending_days} dia(s) com faturamento pendente — fora do lucro até preencher.`)} </div>` : "";
+  $("#dash-res").innerHTML = `
+  <section class="panel"><div class="panel-b">
+    <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;margin-bottom:12px"><span class="mut">Lucro no período</span><strong class="prof ${profCls}" style="font-size:28px">${t.profit_cents == null ? (t.has_pending ? "pendente" : "—") : fBRL(t.profit_cents)}</strong>${deltaHtml(t.profit_cents, p?.profit_cents ?? null)}${p ? '<span class="mut">vs período anterior</span>' : ""}</div>
+    <div class="kpis">
+      ${kpi("Investimento", fBRL(t.investment_cents), `custo ${fBRL(t.cost_cents)}`, deltaHtml(t.investment_cents, p?.investment_cents ?? null, true))}
+      ${kpi("Faturamento", t.costClosed_cents > 0 ? fBRL(t.revenue_cents) : "—", t.has_pending ? `${t.pending_days} dia(s) pendente(s)` : "", deltaHtml(t.revenue_cents, p?.revenue_cents ?? null))}
+      ${kpi("Vendas", String(t.sales), "", deltaHtml(t.sales, p?.sales ?? null))}
+      ${kpi("ROAS-equiv.", t.roas_equivalente == null ? "—" : Calc.formatRoas(t.roas_equivalente), "fatur ÷ custo", deltaHtml(t.roas_equivalente, p?.roas_equivalente ?? null))}
+      ${kpi("CPC Meta", Calc.formatCPC(t.cpc_meta_cents), "invest ÷ cliques", deltaHtml(t.cpc_meta_cents, p?.cpc_meta_cents ?? null, true))}
+      ${kpi("CPC Shopee", Calc.formatCPC(t.cpc_shopee_cents), "invest ÷ cliques", deltaHtml(t.cpc_shopee_cents, p?.cpc_shopee_cents ?? null, true))}
+    </div>
+    ${pendNote}
+  </div></section>
+  <section class="panel"><div class="panel-h"><h2>Evolução diária</h2><span class="mut">custo · faturamento · lucro/prejuízo · faixa nos dias pendentes</span></div><div class="panel-b" id="chart-box"></div></section>
+  <section class="panel"><div class="panel-h"><h2>Decisão por criativo</h2><span class="mut">clique abre o detalhe</span></div><div class="scroll" id="dash-tbl"></div>
+  <div class="foot-note">Ordene por lucro, ROAS-equiv., custo ou vendas clicando no cabeçalho. A cor vem do Sinal (régua + Status + Motivo), nunca do ROAS.</div></section>`;
+  drawChart($("#chart-box"), d.daily);
+  renderDashTable();
+}
+function renderDashTable() {
+  const d = D.data;
+  if (!d) return;
+  const rows = [...d.creatives].sort((x, y) => {
+    const g = (r) => ({ profit: r.totals.profit_cents, roas: r.totals.roas_equivalente, cost: r.totals.cost_cents, sales: r.totals.sales })[D.sort.k];
+    const a = g(x), b = g(y);
+    if (a == null && b == null) return 0; if (a == null) return 1; if (b == null) return -1;
+    return (a - b) * D.sort.dir;
+  });
+  const th = (k, label) => `<th class="num" data-sort="${k}">${label}${D.sort.k === k ? `<span class="ar">${D.sort.dir < 0 ? "↓" : "↑"}</span>` : ""}</th>`;
+  $("#dash-tbl").innerHTML = `<table class="tbl"><thead><tr><th>Criativo</th><th>Status</th><th>Saúde</th>${th("profit","Lucro")}${th("roas","ROAS-equiv.")}${th("cost","Custo")}${th("sales","Vendas")}<th>Motivo</th></tr></thead><tbody>${rows.map((r) => {
+    const pc = profitClass(r.totals.profit_cents);
+    return `<tr class="click" data-id="${r.creative.id}"><td><div class="nm">${esc(r.creative.name)}</div><div class="sub">${esc(r.creative.product||"—")}</div></td><td>${chipFor(r.health)}</td><td>${rulerFor(r.health)}</td><td class="num prof ${pc}">${r.totals.profit_cents == null ? (r.totals.has_pending ? "pendente" : "—") : fBRL(r.totals.profit_cents)}</td><td class="num">${r.totals.roas_equivalente == null ? "—" : Calc.formatRoas(r.totals.roas_equivalente)}</td><td class="num">${fBRL(r.totals.cost_cents)}</td><td class="num">${r.totals.sales}</td><td class="mut">${esc(r.health.motivo ?? "—")}</td></tr>`;
+  }).join("")}</tbody></table>`;
+}
+function drawChart(box, days) {
+  if (!box) return;
+  const W = Math.max(box.clientWidth || 600, 320), H = 220, P = { l: 56, r: 12, t: 12, b: 26 };
+  const iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const vals = [];
+  for (const d of days) { if (d.empty) continue; vals.push(d.cost_cents, d.revenue_cents ?? 0, d.profit_cents ?? 0); }
+  const max = Math.max(1, ...vals.map((v)=>Math.abs(v)));
+  const n = days.length;
+  const x = (i) => P.l + (n === 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const y = (v) => P.t + ih / 2 - (v / max) * (ih / 2 - 4);
+  const bw = n ? Math.min(18, iw / Math.max(n,1) * 0.4) : 8;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico diário">`;
+  s += `<line x1="${P.l}" y1="${y(0)}" x2="${W-P.r}" y2="${y(0)}" stroke="#D8DFDC"/>`;
+  days.forEach((d, i) => {
+    if (d.pending && !d.empty) s += `<rect x="${x(i)-bw}" y="${P.t}" width="${bw*2}" height="${ih}" fill="#F6E8BE" opacity="0.55"><title>${fDate(d.date)} · pendente</title></rect>`;
+  });
+  days.forEach((d, i) => {
+    if (d.empty) return;
+    const p = d.profit_cents ?? 0;
+    const y0 = y(0), y1 = y(p);
+    s += `<rect x="${x(i)-bw/2}" y="${Math.min(y0,y1)}" width="${bw}" height="${Math.max(2,Math.abs(y1-y0))}" fill="${p >= 0 ? "#2FBF7A" : "#E5595B"}"><title>${fDate(d.date)} · lucro ${d.profit_cents == null ? "pendente" : (d.profit_cents/100).toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}</title></rect>`;
+  });
+  const line = (get, color) => {
+    const pts = days.map((d, i) => d.empty ? null : `${x(i).toFixed(1)},${y(get(d) ?? 0).toFixed(1)}`).filter(Boolean);
+    if (pts.length < 2) return "";
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="2"/>`;
+  };
+  s += line((d)=>d.cost_cents, "#16201C");
+  s += line((d)=>d.revenue_cents ?? 0, "#0E76B8");
+  days.forEach((d, i) => { if (i % Math.ceil(n/6) === 0) s += `<text x="${x(i)}" y="${H-8}" font-size="10" text-anchor="middle" fill="#647570">${fDate(d.date)}</text>`; });
+  s += `<g font-size="11"><circle cx="${P.l+6}" cy="8" r="4" fill="#16201C"/><text x="${P.l+14}" y="12" fill="#16201C">Custo</text><circle cx="${P.l+70}" cy="8" r="4" fill="#0E76B8"/><text x="${P.l+78}" y="12" fill="#16201C">Faturamento</text><rect x="${P.l+168}" y="4" width="10" height="8" fill="#2FBF7A"/><rect x="${P.l+180}" y="4" width="10" height="8" fill="#E5595B"/><text x="${P.l+194}" y="12" fill="#16201C">Lucro/prejuízo</text></g>`;
+  s += `</svg>`;
+  box.innerHTML = s;
+}
+
+// ---------- Config: imposto + backup/export (T5) ----------
+async function pageConfig() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Configurações</h1><p class="sub">Imposto, backup e dados</p></div></div>
+  <div class="cols">
+  <section class="panel"><div class="panel-b">
+    <h2 style="margin:0 0 8px">Imposto (%)</h2>
+    <p class="hint">Taxa usada nos próximos lançamentos. Dias antigos ficam intactos (cada dia guarda a própria taxa).</p>
+    <div class="fld"><label for="cfg-tax">Taxa atual (%)</label><input class="in" id="cfg-tax" inputmode="decimal" placeholder="13,86"><span class="hint">Aceita 13,86 ou 13.86 (= 13,86%).</span><div class="err-msg" id="cfg-tax-err" hidden></div></div>
+    <div class="actions"><button class="btn" id="cfg-save" type="button">Salvar imposto</button></div>
+  </div></section>
+  <section class="panel"><div class="panel-b">
+    <h2 style="margin:0 0 8px">Backup e dados</h2>
+    <p class="hint" id="cfg-path">Caminho do arquivo: carregando…</p>
+    <div class="actions"><button class="btn" id="cfg-backup" type="button">Fazer backup agora</button><button class="btn ghost" id="cfg-export" type="button">Exportar dados (JSON)</button></div>
+    <div style="height:12px"></div>
+    <strong>Últimos backups (30 mantidos)</strong>
+    <ul class="recent" id="cfg-backs"><li class="mut">Carregando…</li></ul>
+  </div></section>
+  </div>`;
+  try {
+    const [{ data: s }, info] = await Promise.all([api("/api/settings"), api("/api/info")]);
+    $("#cfg-tax").value = (s.tax_rate * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    $("#cfg-path").textContent = `Caminho do arquivo: ${info.data.dbPath} (pasta ${info.data.dataDir}) — backups diários em backups/, 30 últimos.`;
+  } catch { $("#cfg-path").textContent = "Não foi possível ler o caminho do arquivo."; }
+  $("#cfg-save").addEventListener("click", async () => {
+    const err = $("#cfg-tax-err");
+    err.hidden = true;
+    try {
+      const { data } = await api("/api/settings", { method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify({ tax_rate: $("#cfg-tax").value }) });
+      $("#cfg-tax").value = (data.tax_rate * 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      toast(`Imposto atualizado para ${(data.tax_rate*100).toLocaleString("pt-BR")}% — dias antigos intactos.`);
+    } catch (e) { err.textContent = "Valor inválido. Use algo como 13,86."; err.hidden = false; }
+  });
+  $("#cfg-backup").addEventListener("click", async () => {
+    try { const { data } = await api("/api/backup", { method: "POST" }); toast(`Backup criado: ${data.file}`); await loadBacks(); }
+    catch { toast("Não foi possível criar o backup."); }
+  });
+  $("#cfg-export").addEventListener("click", async () => {
+    try {
+      const { data } = await api("/api/export");
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `gestor-export-${todayLocal()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast("Dados exportados.");
+    } catch { toast("Não foi possível exportar."); }
+  });
+  async function loadBacks() {
+    try {
+      const { data } = await api("/api/backups");
+      $("#cfg-backs").innerHTML = data.length ? data.slice(0,30).map((b)=>`<li><span>${esc(b.file)}</span><span class="mut">${b.size != null ? (b.size/1024).toLocaleString("pt-BR",{maximumFractionDigits:0}) + " KB" : ""}</span></li>`).join("") : `<li class="mut">Nenhum backup ainda.</li>`;
+    } catch { $("#cfg-backs").innerHTML = `<li class="mut">—</li>`; }
+  }
+  await loadBacks();
+}
+
 function router() {
   $$(".nav a").forEach((a) => a.removeAttribute("aria-current"));
-  const h = location.hash || "#/criativos";
+  const h = location.hash || "#/dashboard";
   if (h.startsWith("#/cadastro")) { $('[data-nav="cadastro"]').setAttribute("aria-current","page"); pageRegister(); }
   else if (h.startsWith("#/criativo/")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDetail(h.split("/")[2]); }
   else if (h.startsWith("#/lancamento")) { $('[data-nav="lancamento"]').setAttribute("aria-current","page"); pageDaily(); }
-  else { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageLibrary(); }
+  else if (h.startsWith("#/criativos")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageLibrary(); }
+  else if (h.startsWith("#/config")) { $('[data-nav="config"]').setAttribute("aria-current","page"); pageConfig(); }
+  else { $('[data-nav="dashboard"]').setAttribute("aria-current","page"); pageDashboard(); }
 }
 window.addEventListener("hashchange", router);
 router();

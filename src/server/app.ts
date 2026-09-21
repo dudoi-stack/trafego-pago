@@ -3,6 +3,10 @@ import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION } from "./assets.ts";
 import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
 import { getDay, pendingWarning, saveDayBulk, saveOneEntry } from "./entries.ts";
+import { getDashboard, parseDashboardQuery } from "./dashboard.ts";
+import { getSettings, updateSettings } from "./settings.ts";
+import { backupNow, ensureDailyBackup, getExportData, listBackupFiles, backupFileSize } from "./backup.ts";
+import { dbPathFor } from "./paths.ts";
 import { isValidDate } from "../shared/calc.ts";
 
 export interface StartServerOptions {
@@ -30,6 +34,12 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
   }
   await ensureDataDir(opts.dataDir);
   const db = openDatabase(opts.dataDir);
+  // Backup diário (30 últimos). Nunca derruba o boot se falhar.
+  try {
+    await ensureDailyBackup(db, opts.dataDir);
+  } catch (err) {
+    console.warn(`[gestor] backup diário falhou: ${err instanceof Error ? err.message : String(err)}`);
+  }
   // Módulo único de cálculo: fonte em src/shared/calc.ts, transpilado na hora
   // para o navegador (ao-vivo). Cacheado no boot; em `bun build --compile`
   // o `scripts/embed-assets.ts` gera `src/web/shared/calc.js` antes de embutir.
@@ -71,7 +81,58 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
           q: url.searchParams.get("q") ?? "",
           status: url.searchParams.get("status") ?? "all",
           product: url.searchParams.get("product") ?? "",
+          sort: url.searchParams.get("sort") ?? url.searchParams.get("orderBy") ?? "recent",
+          order: url.searchParams.get("order") ?? url.searchParams.get("dir") ?? "",
         });
+        return Response.json({ data, warnings: [] });
+      }
+      if (url.pathname === "/api/dashboard" && req.method === "GET") {
+        const parsed = parseDashboardQuery(url.searchParams);
+        if (!parsed.ok) {
+          return Response.json({ error: parsed.error, warnings: [] }, { status: 400 });
+        }
+        const result = getDashboard(db, parsed.filter);
+        return Response.json({ data: result, warnings: result.warnings });
+      }
+      if (url.pathname === "/api/settings" && req.method === "GET") {
+        return Response.json({ data: getSettings(db), warnings: [] });
+      }
+      if (url.pathname === "/api/settings" && (req.method === "PUT" || req.method === "PATCH")) {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const result = updateSettings(db, (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      if (url.pathname === "/api/info" && req.method === "GET") {
+        return Response.json({
+          data: { dbPath: dbPathFor(opts.dataDir), dataDir: opts.dataDir, version: APP_VERSION },
+          warnings: [],
+        });
+      }
+      if ((url.pathname === "/api/backup" || url.pathname === "/api/backups") && req.method === "POST") {
+        try {
+          const res = await backupNow(db, opts.dataDir);
+          return Response.json({ data: { file: res.file, path: res.path, kept: res.kept }, warnings: [] }, { status: 201 });
+        } catch (err) {
+          return Response.json(
+            { error: "backup_falhou", warnings: [], detail: err instanceof Error ? err.message : String(err) },
+            { status: 500 },
+          );
+        }
+      }
+      if (url.pathname === "/api/backups" && req.method === "GET") {
+        const files = await listBackupFiles(opts.dataDir);
+        const withSize = await Promise.all(
+          files.map(async (file) => ({ file, size: await backupFileSize(opts.dataDir, file) })),
+        );
+        return Response.json({ data: withSize, warnings: [] });
+      }
+      if (url.pathname === "/api/export" && req.method === "GET") {
+        const data = getExportData(db);
         return Response.json({ data, warnings: [] });
       }
       if (url.pathname === "/api/creatives/bulk" && req.method === "POST") {

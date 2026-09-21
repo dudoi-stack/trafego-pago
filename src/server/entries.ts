@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { findDia1, hasMovement, isValidDate } from "../shared/calc.ts";
+import { getTaxRate } from "./settings.ts";
 import type { CreativeRow, EntryRow } from "./creatives.ts";
 
 export interface DayRow {
@@ -9,16 +10,8 @@ export interface DayRow {
   tax_rate: number;
 }
 
-const DEFAULT_TAX = 0.1386;
-
 export function currentTaxRate(db: Database): number {
-  try {
-    const rows = db.query("SELECT value FROM settings WHERE key = 'tax_rate';").all() as { value: string }[];
-    const v = rows.length > 0 ? Number(rows[0].value) : NaN;
-    return Number.isFinite(v) && v >= 0 ? v : DEFAULT_TAX;
-  } catch {
-    return DEFAULT_TAX;
-  }
+  return getTaxRate(db);
 }
 
 function toNumOrNull(v: unknown): number | null {
