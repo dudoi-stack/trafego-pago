@@ -3,7 +3,10 @@
 App local, offline, para controle de criativos de tráfego pago (Meta Ads → Shopee afiliados).
 V1 roda no **Windows e no macOS**: dois cliques abrem o navegador no painel; dados em SQLite fora do executável.
 
-> Fase 0 (este commit): esqueleto executável — servidor local + `/api/health` + página embutida + SQLite. Go/No-Go do projeto.
+Cadastro único e em lote, lançamento diário em lote, biblioteca com detalhe
+réplica-da-planilha, dashboard de decisão com Sinal (régua + status + motivo),
+imposto editável sem reescrever a história, backup/export — 100% offline,
+valores em R$ no formato brasileiro (aceita `4,18` e `4.18`).
 
 ## Requisitos (desenvolvedor)
 
@@ -25,11 +28,14 @@ Para isolar, use `GESTOR_DATA_DIR=./dados bun run dev`. Para não abrir o navega
 ## Testes e typecheck
 
 ```sh
-bun test              # contrato HTTP em tests/api.test.ts (seam 2 da spec)
-bunx tsc --noEmit     # typecheck
+bun test              # 6 arquivos: cálculo puro (seam 1) + contrato HTTP por rota (seam 2)
+bun run typecheck     # tsc --noEmit
 ```
 
-Seams de teste (spec #6): (1) módulo de cálculo puro — chega na Fase 1; (2) contrato HTTP por rota — este esqueleto cobre `GET /api/health`.
+Seams de teste (spec #6): (1) módulo de cálculo puro em `tests/calc.test.ts`
+(vetores da planilha real + travas do Sinal); (2) contrato HTTP por rota em
+`tests/api.test.ts` (T2), `t3/t4/t5` e `t6` (entrega: offline, R$ BR,
+backup-antes-de-migrar, LEIA-ME).
 
 ## Gerar o executável
 
@@ -37,8 +43,14 @@ Seams de teste (spec #6): (1) módulo de cálculo puro — chega na Fase 1; (2) 
 bun run build
 ```
 
-Saída em `dist/`: `GestorTrafego.exe` (Win x64), `GestorTrafego-macos-arm64/x64` + `LEIA-ME.txt`.
+Saída em `dist/`: `GestorTrafego.exe` (Win x64), `GestorTrafego-macos-arm64/x64` + `LEIA-ME.txt` (3 passos).
 Teste em máquina limpa (sem Bun/Node): duplo clique abre o navegador e cria `gestor.db` na pasta de dados.
+
+## Atualizar sem medo
+
+Feche o programa, troque **só o executável** e abra de novo. Ao abrir, o app
+faz **backup-antes-de-migrar** automaticamente e migra o banco sozinho.
+Backups diários (30 últimos) ficam na pasta `backups` ao lado do banco.
 
 ## Segunda instância
 
@@ -46,7 +58,8 @@ Abrir de novo **não** duplica o servidor: o boot sonda `/api/health` em `127.0.
 
 ## Layout
 
-- `src/server/` — `index.ts` (boot), `app.ts` (Bun.serve), `db.ts` (SQLite + migrações), `paths.ts`, `browser.ts`, `assets.ts` (gerado)
-- `src/server/migrations/001_init.sql` — esqueleto (schema_migrations + settings); domínio chega na Fase 1
-- `src/web/index.html` — painel placeholder da Fase 0 (embutido no exe via `scripts/embed-assets.ts`)
-- `tests/api.test.ts` — contrato `/api/health`
+- `src/server/` — `index.ts` (boot), `app.ts` (Bun.serve), `db.ts` (SQLite + migrações com backup-antes-de-migrar), `paths.ts`, `browser.ts`, `backup.ts`, `leia-me.ts`, `assets.ts` (gerado)
+- `src/server/migrations/` — `001_init.sql` (settings + schema_migrations), `002_domain.sql` (criativos + lançamentos)
+- `src/shared/calc.ts` — módulo único de cálculo (servidor + navegador via `/shared/calc.js`, com bundle embutido no exe)
+- `src/web/index.html` — interface (embutida no exe via `scripts/embed-assets.ts`; 100% offline, sem CDN)
+- `tests/` — `calc.test.ts`, `api.test.ts`, `t3/t4/t5/t6.test.ts`

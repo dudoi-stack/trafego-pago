@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { ensureDataDir, openDatabase } from "./db.ts";
-import { INDEX_HTML, APP_VERSION } from "./assets.ts";
+import { INDEX_HTML, APP_VERSION, CALC_JS, assets } from "./assets.ts";
 import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
 import { getDay, pendingWarning, saveDayBulk, saveOneEntry } from "./entries.ts";
 import { getDashboard, parseDashboardQuery } from "./dashboard.ts";
@@ -42,19 +42,28 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
   }
   // Módulo único de cálculo: fonte em src/shared/calc.ts, transpilado na hora
   // para o navegador (ao-vivo). Cacheado no boot; em `bun build --compile`
-  // o `scripts/embed-assets.ts` gera `src/web/shared/calc.js` antes de embutir.
+  // não há fonte ao lado do exe — o fallback é o CALC_JS embutido (T6 cobre).
   let calcJs: string | null = null;
   async function getCalcJs(): Promise<string> {
     if (calcJs != null) return calcJs;
-    const src = await Bun.file(new URL("../shared/calc.ts", import.meta.url)).text();
-    calcJs = new Bun.Transpiler({ loader: "ts" }).transformSync(src, "ts");
-    return calcJs;
+    try {
+      const src = await Bun.file(new URL("../shared/calc.ts", import.meta.url)).text();
+      calcJs = new Bun.Transpiler({ loader: "ts" }).transformSync(src, "ts");
+      return calcJs;
+    } catch {
+      // Executável sem fonte ao lado: usa o bundle embutido pelo embed.
+      if (CALC_JS) {
+        calcJs = CALC_JS;
+        return calcJs;
+      }
+      throw new Error("calc_indisponivel");
+    }
   }
   try {
     await getCalcJs();
   } catch {
-    // Em exe sem arquivo-fonte ao lado, o fallback é o asset embutido (T6 cobre).
-    calcJs = null;
+    // Se nem o ao-vivo nem o embutido funcionarem, a rota responde 500.
+    calcJs = CALC_JS || null;
   }
 
   const server = Bun.serve({
@@ -217,6 +226,25 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
         return new Response(INDEX_HTML, {
           headers: { "content-type": "text/html; charset=utf-8" },
         });
+      }
+      // T6 offline: qualquer arquivo em src/web/ embutido no exe
+      // (fontes .woff2 locais, css, js, svg…). 100% offline, sem CDN.
+      if (req.method === "GET") {
+        const key = url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname;
+        const asset = assets[key];
+        if (asset) {
+          if (asset.text !== undefined) {
+            return new Response(asset.text, {
+              headers: { "content-type": asset.contentType },
+            });
+          }
+          if (asset.binary !== undefined) {
+            const bytes = asset.binary as unknown as Uint8Array;
+            return new Response(bytes, {
+              headers: { "content-type": asset.contentType },
+            });
+          }
+        }
       }
       return Response.json({ error: "not_found" }, { status: 404 });
     },
