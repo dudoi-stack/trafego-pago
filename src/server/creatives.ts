@@ -1,5 +1,15 @@
 import type { Database } from "bun:sqlite";
-import { agg, evaluateCreative, isValidDate, type CreativeStatus, type DayEntry } from "../shared/calc.ts";
+import {
+  agg,
+  calcRow,
+  evaluateCreative,
+  evaluateDay,
+  findDia1,
+  hasMovement,
+  isValidDate,
+  type CreativeStatus,
+  type DayEntry,
+} from "../shared/calc.ts";
 
 export type CreativeFormat = "video" | "image" | "carousel";
 
@@ -144,6 +154,151 @@ export function getCreative(db: Database, id: number): CreativeWithTotals | null
     .all(id) as CreativeRow[];
   if (rows.length === 0) return null;
   return withTotals(db, rows[0]);
+}
+
+export interface DetailEntry {
+  date: string;
+  investment_cents: number;
+  sales: number;
+  revenue_cents: number | null;
+  clicks_meta: number;
+  clicks_shopee: number;
+  tax_rate: number;
+  cost_cents: number;
+  profit_cents: number | null;
+  cpc_meta_cents: number | null;
+  cpc_shopee_cents: number | null;
+  is_pending: boolean;
+  has_movement: boolean;
+  is_dia1: boolean;
+  signal: { saude: "saudavel" | "atencao"; motivo: string | null; ruler: "azul" | "amarelo" } | null;
+}
+
+export interface CreativeDetail {
+  creative: CreativeRow;
+  entries: DetailEntry[];
+  totals: CreativeWithTotals["totals"];
+  health: CreativeWithTotals["health"];
+  months: string[];
+  dia1: string | null;
+}
+
+function isValidMonth(s: string): boolean {
+  if (!/^\d{4}-\d{2}$/.test(s)) return false;
+  const m = Number(s.slice(5, 7));
+  return m >= 1 && m <= 12;
+}
+
+/** Detalhe réplica-da-planilha: dias (recentes no topo) + TOTAL do visível + saúde global. */
+export function getCreativeDetail(
+  db: Database,
+  id: number,
+  month?: string,
+): { ok: true; detail: CreativeDetail } | { ok: false; error: "not_found" | "mes_invalido" } {
+  const rows = db
+    .query("SELECT id, name, product, format, status, start_date, url, notes, created_at FROM creatives WHERE id = ?;")
+    .all(id) as CreativeRow[];
+  if (rows.length === 0) return { ok: false, error: "not_found" };
+  const creative = rows[0];
+  const monthFilter = month == null || month === "" || month === "all" ? undefined : month;
+  if (monthFilter != null && !isValidMonth(monthFilter)) {
+    return { ok: false, error: "mes_invalido" };
+  }
+  const allRows = db
+    .query(
+      "SELECT date, investment_cents, sales, revenue_cents, clicks_meta, clicks_shopee, tax_rate FROM daily_entries WHERE creative_id = ? ORDER BY date DESC;",
+    )
+    .all(id) as EntryRow[];
+  const allDays: DayEntry[] = allRows.map((r) => ({
+    date: r.date,
+    investment_cents: r.investment_cents,
+    sales: r.sales,
+    revenue_cents: r.revenue_cents,
+    clicks_meta: r.clicks_meta,
+    clicks_shopee: r.clicks_shopee,
+    tax_rate: r.tax_rate,
+  }));
+  const dia1raw = findDia1(allDays);
+  const isPreCadastro = creative.start_date > todayLocal();
+  // Pré-cadastro futuro: não conta Dia 1 (igual à biblioteca).
+  const dia1 = isPreCadastro ? null : dia1raw;
+  const h = isPreCadastro
+    ? { saude: null, statusDisplay: "Sem dados", ruler: "cinza", motivo: null, dia1: null }
+    : evaluateCreative(creative.status as CreativeStatus, allDays);
+  const months = [...new Set(allRows.map((r) => r.date.slice(0, 7)))].sort().reverse();
+  const filtered = monthFilter ? allRows.filter((r) => r.date.startsWith(monthFilter)) : allRows;
+  const filteredDays: DayEntry[] = filtered.map((r) => ({
+    date: r.date,
+    investment_cents: r.investment_cents,
+    sales: r.sales,
+    revenue_cents: r.revenue_cents,
+    clicks_meta: r.clicks_meta,
+    clicks_shopee: r.clicks_shopee,
+    tax_rate: r.tax_rate,
+  }));
+  const a = agg(filteredDays);
+  const entries: DetailEntry[] = filtered.map((r) => {
+    const day: DayEntry = {
+      date: r.date,
+      investment_cents: r.investment_cents,
+      sales: r.sales,
+      revenue_cents: r.revenue_cents,
+      clicks_meta: r.clicks_meta,
+      clicks_shopee: r.clicks_shopee,
+      tax_rate: r.tax_rate,
+    };
+    const rc = calcRow(day);
+    const movement = hasMovement(day);
+    const isDia1 = dia1 != null && r.date === dia1;
+    const signal = movement ? evaluateDay(day, isDia1) : null;
+    return {
+      date: r.date,
+      investment_cents: r.investment_cents,
+      sales: r.sales,
+      revenue_cents: r.revenue_cents,
+      clicks_meta: r.clicks_meta,
+      clicks_shopee: r.clicks_shopee,
+      tax_rate: r.tax_rate,
+      cost_cents: rc.cost_cents,
+      profit_cents: rc.profit_cents,
+      cpc_meta_cents: rc.cpc_meta_cents,
+      cpc_shopee_cents: rc.cpc_shopee_cents,
+      is_pending: rc.is_pending,
+      has_movement: rc.has_movement,
+      is_dia1: isDia1,
+      signal,
+    };
+  });
+  return {
+    ok: true,
+    detail: {
+      creative,
+      entries,
+      totals: {
+        investment_cents: a.investment_cents,
+        cost_cents: a.cost_cents,
+        sales: a.sales,
+        revenue_cents: a.revenue_cents,
+        costClosed_cents: a.costClosed_cents,
+        profit_cents: a.profit_cents,
+        clicks_meta: a.clicks_meta,
+        clicks_shopee: a.clicks_shopee,
+        cpc_meta_cents: a.cpc_meta_cents,
+        cpc_shopee_cents: a.cpc_shopee_cents,
+        pending_days: a.pending_days,
+        has_pending: a.has_pending,
+      },
+      health: {
+        saude: h.saude as CreativeWithTotals["health"]["saude"],
+        statusDisplay: h.statusDisplay as CreativeWithTotals["health"]["statusDisplay"],
+        ruler: h.ruler as CreativeWithTotals["health"]["ruler"],
+        motivo: h.motivo,
+        dia1: h.dia1,
+      },
+      months,
+      dia1,
+    },
+  };
 }
 
 export interface CreateInput {
@@ -327,6 +482,118 @@ export function createCreative(db: Database, input: CreateInput): CreateResult {
       .all(name, product, format, status, startRaw, url, notes) as CreativeRow[];
     const created = withTotals(db, res[0]);
     return { statusCode: 201, body: { data: created, warnings: [] } };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/UNIQUE|unique/i.test(msg)) {
+      return {
+        statusCode: 409,
+        body: {
+          warnings: ["Já existe um Criativo com esse nome. Use outro nome para diferenciar."],
+          error: "nome_duplicado",
+        },
+      };
+    }
+    throw err;
+  }
+}
+
+export interface UpdateResult {
+  statusCode: number;
+  body: { data?: CreativeWithTotals; warnings: string[]; error?: string };
+}
+
+/** Edita o Criativo (inclui pausar/encerrar/reabrir/escalar). Encerrar nunca apaga lançamentos. */
+export function updateCreative(db: Database, id: number, input: CreateInput): UpdateResult {
+  const rows = db
+    .query("SELECT id, name, product, format, status, start_date, url, notes, created_at FROM creatives WHERE id = ?;")
+    .all(id) as CreativeRow[];
+  if (rows.length === 0) {
+    return { statusCode: 404, body: { warnings: [], error: "not_found" } };
+  }
+  const current = rows[0];
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(input, k);
+
+  let name = current.name;
+  if (has("name")) {
+    if (typeof input.name !== "string" || input.name.trim() === "") {
+      return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
+    }
+    name = input.name.trim();
+  }
+  let product = current.product;
+  if (has("product")) {
+    if (typeof input.product !== "string") {
+      return { statusCode: 400, body: { warnings: [], error: "valor_invalido" } };
+    }
+    product = input.product.trim();
+  }
+  let format = current.format;
+  if (has("format")) {
+    if (typeof input.format !== "string" || !FORMATS.includes(input.format as CreativeFormat)) {
+      return { statusCode: 400, body: { warnings: [], error: "formato_invalido" } };
+    }
+    format = input.format as CreativeFormat;
+  }
+  let start_date = current.start_date;
+  if (has("start_date")) {
+    if (typeof input.start_date !== "string" || !isValidDate(input.start_date)) {
+      return { statusCode: 400, body: { warnings: [], error: "data_invalida" } };
+    }
+    start_date = input.start_date;
+  }
+  let status = current.status;
+  if (has("status")) {
+    if (typeof input.status !== "string" || !STATUSES.includes(input.status as CreativeStatus)) {
+      return { statusCode: 400, body: { warnings: [], error: "status_invalido" } };
+    }
+    status = input.status as CreativeStatus;
+  }
+  let url = current.url;
+  if (has("url")) {
+    if (typeof input.url !== "string") {
+      return { statusCode: 400, body: { warnings: [], error: "valor_invalido" } };
+    }
+    url = input.url.trim();
+  }
+  let notes = current.notes;
+  if (has("notes")) {
+    if (typeof input.notes !== "string") {
+      return { statusCode: 400, body: { warnings: [], error: "valor_invalido" } };
+    }
+    notes = input.notes;
+  }
+
+  // Escalando é selo manual só do Ativo: só Ativo vira Escalando.
+  if (status === "escalando" && current.status !== "ativo" && current.status !== "escalando") {
+    return {
+      statusCode: 400,
+      body: { warnings: ["Só criativos Ativos podem ser marcados como Escalando."], error: "escalando_so_do_ativo" },
+    };
+  }
+
+  // Nome único case-insensitive entre não-Encerrados (exclui a si mesmo).
+  if (status !== "encerrado") {
+    const dup = db
+      .query("SELECT id FROM creatives WHERE lower(name) = lower(?) AND id != ? AND status != 'encerrado' LIMIT 1;")
+      .all(name, id) as { id: number }[];
+    if (dup.length > 0) {
+      return {
+        statusCode: 409,
+        body: {
+          warnings: ["Já existe um Criativo com esse nome. Use outro nome para diferenciar."],
+          error: "nome_duplicado",
+        },
+      };
+    }
+  }
+
+  try {
+    const res = db
+      .query(
+        "UPDATE creatives SET name = ?, product = ?, format = ?, status = ?, start_date = ?, url = ?, notes = ? WHERE id = ? RETURNING id, name, product, format, status, start_date, url, notes, created_at;",
+      )
+      .all(name, product, format, status, start_date, url, notes, id) as CreativeRow[];
+    return { statusCode: 200, body: { data: withTotals(db, res[0]), warnings: [] } };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (/UNIQUE|unique/i.test(msg)) {
