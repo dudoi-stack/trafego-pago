@@ -47,6 +47,17 @@ for (const rel of relFiles.sort()) {
 
 const indexRaw = await readFile(join(webPath, "index.html"), "utf-8").catch(() => "<h1>Gestor</h1>");
 
+// T6: módulo único de cálculo transpilado e embutido no exe.
+// Em dev o servidor transpila ao vivo (fresco); no executável
+// (`bun build --compile`) não há fonte ao lado — o fallback é este bundle.
+let calcJs = "";
+try {
+  const calcSrc = await readFile(new URL("../src/shared/calc.ts", import.meta.url), "utf-8");
+  calcJs = new Bun.Transpiler({ loader: "ts" }).transformSync(calcSrc, "ts");
+} catch (err) {
+  console.warn(`[embed] aviso: não foi possível transpilar calc.ts: ${err instanceof Error ? err.message : String(err)}`);
+}
+
 const out = `// GERADO por scripts/embed-assets.ts — não edite à mão. Rode \`bun run embed\`.
 export interface EmbeddedAsset { contentType: string; text?: string; binary?: Buffer }
 export const assets: Record<string, EmbeddedAsset> = {
@@ -54,6 +65,8 @@ ${entries.join("\n")}
 };
 export const INDEX_HTML: string = ${JSON.stringify(indexRaw)};
 export const APP_VERSION = ${JSON.stringify(process.env.npm_package_version ?? "0.1.0")};
+// T6: bundle do módulo único de cálculo (fallback offline no executável).
+export const CALC_JS: string = ${JSON.stringify(calcJs)};
 `;
 await writeFile(fileURLToPath(OUT_FILE), out);
 console.log(`[embed] ${relFiles.length} arquivo(s) da web embutido(s) em src/server/assets.ts`);
