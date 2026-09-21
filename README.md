@@ -17,6 +17,8 @@ bun run embed      # gera src/server/assets.ts a partir de src/web/
 bun run dev        # http://127.0.0.1:4173 (porta ocupada → próxima)
 ```
 
+Para ver o sistema sem prender o terminal: `bun run up` (sobe em segundo plano e mostra a URL) e `bun run down` (derruba).
+
 Dados de dev ficam no caminho do SO (`%APPDATA%\GestorTrafego\`, `~/Library/Application Support/GestorTrafego/`).
 Para isolar, use `GESTOR_DATA_DIR=./dados bun run dev`. Para não abrir o navegador: `GESTOR_NO_BROWSER=1`.
 
