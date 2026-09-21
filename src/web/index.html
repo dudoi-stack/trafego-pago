@@ -63,6 +63,20 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 .cols{display:grid;grid-template-columns:minmax(0,640px) minmax(260px,1fr);gap:16px;align-items:start}
 @media(max-width:900px){.app{grid-template-columns:1fr}.side{height:auto;position:static;flex-direction:row;align-items:center}.cols,.two{grid-template-columns:1fr}}
+.daybar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.daybar .long{font-weight:700;font-size:17px;margin-left:8px}
+.daytbl td{padding:6px 8px}
+.ci{width:100%;min-width:76px;height:32px;padding:0 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);text-align:right}
+.ci:focus{outline:0;border-color:var(--ink)}
+.ci.bad{border-color:var(--bad)}
+.ci::placeholder{color:var(--muted);font-style:italic}
+.daytbl td.calc{background:#F4F7F6;text-align:right;white-space:nowrap;padding:0 10px}
+.savebar{position:sticky;bottom:0;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;background:var(--surface);border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+.bulkprev{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.bulkprev span{background:#F4F7F6;border:1px solid var(--line);border-radius:99px;padding:2px 10px;font-size:12.5px}
+.bulkprev span.dup{border-color:var(--bad);color:var(--bad)}
+.warnbox{display:flex;gap:8px;align-items:flex-start;margin:0 18px 12px;font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:9px;padding:9px 10px}
+.scroll{overflow:auto;max-width:100%}
 </style>
 </head>
 <body>
@@ -72,6 +86,7 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
     <nav class="nav" aria-label="Principal">
       <a href="#/criativos" data-nav="criativos">Criativos</a>
       <a href="#/cadastro" data-nav="cadastro">Cadastro</a>
+      <a href="#/lancamento" data-nav="lancamento">Lançamento</a>
     </nav>
   </aside>
   <main class="main"><div class="wrap" id="view"></div></main>
@@ -148,18 +163,25 @@ async function libBody() {
   } catch { box.innerHTML = `<div class="empty"><strong>Não foi possível carregar</strong></div>`; }
 }
 
-// ---------- Cadastro único (T2) ----------
+// ---------- Cadastro (T2 único + T3 em lote) ----------
 // produto/formato/data mantidos após cada cadastro para encadear o próximo.
-const R = { name: "", product: "", format: "video", start: todayLocal(), status: "ativo", url: "", notes: "" };
+const R = { mode: "single", name: "", bulk: "", product: "", format: "video", start: todayLocal(), status: "ativo", url: "", notes: "" };
+const bulkNames = () => R.bulk.split("\n").map((s) => s.trim()).filter(Boolean);
 async function pageRegister() {
   let products = [];
-  try { const { data } = await api("/api/creatives"); products = [...new Set(data.map((c) => c.product).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR")); } catch {}
+  let existing = [];
+  try { const { data } = await api("/api/creatives"); products = [...new Set(data.map((c) => c.product).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR")); existing = data.map((c) => ({ name: c.name, status: c.status })); } catch {}
+  const bulk = R.mode === "bulk";
   const isFuture = R.start > todayLocal();
   view().innerHTML = `
-  <div class="ph"><div><h1>Cadastro</h1><p class="sub">Um Criativo por vez. Os números do dia entram depois, no lançamento.</p></div></div>
+  <div class="ph"><div><h1>Cadastro</h1><p class="sub">Registre os criativos novos. Os números do dia entram depois, no lançamento.</p></div></div>
   <div class="cols">
   <section class="panel"><div class="panel-b">
-    <div class="fld"><label for="r-name">Nome do criativo</label><input class="in" id="r-name" value="${esc(R.name)}" placeholder="Ex.: Depoimento cozinha 03" autocomplete="off"><div class="err-msg" id="r-err" hidden></div></div>
+    <div class="seg" role="group" aria-label="Modo de cadastro"><button type="button" data-mode="single" aria-pressed="${!bulk}">Um criativo</button><button type="button" data-mode="bulk" aria-pressed="${bulk}">Vários de uma vez</button></div>
+    <div style="height:14px"></div>
+    ${bulk
+      ? `<div class="fld"><label for="r-bulk">Nomes dos criativos (um por linha)</label><textarea class="in" id="r-bulk" rows="6" placeholder="Depoimento cozinha 03&#10;UGC achadinho 04">${esc(R.bulk)}</textarea><div class="bulkprev" id="r-prev" aria-live="polite"></div><div class="err-msg" id="r-err" hidden></div></div>`
+      : `<div class="fld"><label for="r-name">Nome do criativo</label><input class="in" id="r-name" value="${esc(R.name)}" placeholder="Ex.: Depoimento cozinha 03" autocomplete="off"><div class="err-msg" id="r-err" hidden></div></div>`}
     <div class="fld"><label for="r-product">Produto ou oferta</label><input class="in" id="r-product" list="r-products" value="${esc(R.product)}" placeholder="Ex.: Mini processador" autocomplete="off"><datalist id="r-products">${products.map((p)=>`<option value="${esc(p)}">`).join("")}</datalist><span class="hint">Mantido após cadastrar para encadear o próximo.</span></div>
     <div class="fld"><span class="l" style="font-weight:700">Formato</span><div class="seg" role="group" aria-label="Formato">${Object.entries(FORMAT).map(([k,v])=>`<button type="button" data-format="${k}" aria-pressed="${R.format===k}">${v}</button>`).join("")}</div></div>
     <div class="two">
@@ -167,24 +189,47 @@ async function pageRegister() {
       <div class="fld"><label for="r-status">Status inicial</label><select class="in" id="r-status">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>
     </div>
     ${isFuture ? `<p class="hint" id="r-pre">Pré-cadastro: começa em ${fDate(R.start)} — não conta Dia 1 nem dispara Sinal até ter movimento.</p>` : ``}
+    ${bulk ? `` : `
     <div class="fld"><label for="r-url">Link do Criativo (opcional)</label><input class="in" id="r-url" type="url" value="${esc(R.url)}" placeholder="Pasta do Drive ou link do Criativo"></div>
-    <div class="fld"><label for="r-notes">Observações (opcional)</label><textarea class="in" id="r-notes" placeholder="Gancho, ângulo, público…">${esc(R.notes)}</textarea></div>
-    <div class="actions"><button class="btn" id="r-save" type="button">Cadastrar</button><button class="btn ghost" id="r-save-go" type="button">Cadastrar e lançar dados</button></div>
+    <div class="fld"><label for="r-notes">Observações (opcional)</label><textarea class="in" id="r-notes" placeholder="Gancho, ângulo, público…">${esc(R.notes)}</textarea></div>`}
+    <div class="actions"><button class="btn" id="r-save" type="button"><span id="r-save-l">Cadastrar</span></button><button class="btn ghost" id="r-save-go" type="button">Cadastrar e lançar dados</button></div>
   </div></section>
   <section class="panel"><div class="panel-b"><strong>Últimos cadastrados</strong></div><ul class="recent" id="r-recent"><li class="mut">Carregando…</li></ul></section>
   </div>`;
   $("#r-status").value = R.status;
-  const err = (m) => { const e = $("#r-err"); e.textContent = m; e.hidden = false; $("#r-name").classList.add("err"); $("#r-name").focus(); };
-  const clearErr = () => { $("#r-err").hidden = true; $("#r-name").classList.remove("err"); };
-  $("#r-name").addEventListener("input", (e) => { R.name = e.target.value; clearErr(); });
+  const errEl = () => $("#r-err");
+  const showErr = (m, sel) => { const e = errEl(); e.textContent = m; e.hidden = false; const i = sel ? $(sel) : null; if (i) { i.classList.add("err"); i.focus(); } };
+  const clearErr = () => { const e = errEl(); if (e) e.hidden = true; $$(".in.err").forEach((i)=>i.classList.remove("err")); };
+  const paintPreview = () => {
+    const box = $("#r-prev");
+    if (!box) { const l = $("#r-save-l"); if (l) l.textContent = "Cadastrar"; return; }
+    const names = bulkNames();
+    const taken = new Set(existing.filter((c) => c.status !== "encerrado").map((c) => String(c.name).toLowerCase()));
+    const seen = new Set();
+    box.innerHTML = names.map((n) => {
+      const k = n.toLowerCase();
+      const dup = taken.has(k) || seen.has(k);
+      seen.add(k);
+      return `<span class="${dup ? "dup" : ""}">${esc(n)}</span>`;
+    }).join("");
+    $("#r-save-l").textContent = names.length > 1 ? `Cadastrar ${names.length} criativos` : "Cadastrar";
+  };
+  $$("[data-mode]").forEach((b) => b.addEventListener("click", () => { R.mode = b.dataset.mode; pageRegister(); }));
+  const nameInput = $("#r-name");
+  if (nameInput) nameInput.addEventListener("input", (e) => { R.name = e.target.value; clearErr(); });
+  const bulkInput = $("#r-bulk");
+  if (bulkInput) bulkInput.addEventListener("input", (e) => { R.bulk = e.target.value; clearErr(); paintPreview(); });
   $("#r-product").addEventListener("input", (e) => { R.product = e.target.value; });
   $("#r-start").addEventListener("change", (e) => { R.start = e.target.value || todayLocal(); pageRegister(); });
   $("#r-status").addEventListener("change", (e) => { R.status = e.target.value; });
-  $("#r-url").addEventListener("input", (e) => { R.url = e.target.value; });
-  $("#r-notes").addEventListener("input", (e) => { R.notes = e.target.value; });
+  const urlInput = $("#r-url");
+  if (urlInput) urlInput.addEventListener("input", (e) => { R.url = e.target.value; });
+  const notesInput = $("#r-notes");
+  if (notesInput) notesInput.addEventListener("input", (e) => { R.notes = e.target.value; });
   $$("[data-format]").forEach((b) => b.addEventListener("click", () => { R.format = b.dataset.format; $$("[data-format]").forEach((x)=>x.setAttribute("aria-pressed", x===b)); }));
-  $("#r-save").addEventListener("click", () => submit(false, err));
-  $("#r-save-go").addEventListener("click", () => submit(true, err));
+  $("#r-save").addEventListener("click", () => submitRegister(false, showErr));
+  $("#r-save-go").addEventListener("click", () => submitRegister(true, showErr));
+  paintPreview();
   await paintRecent();
 }
 async function paintRecent() {
@@ -192,11 +237,27 @@ async function paintRecent() {
     const { data } = await api("/api/creatives");
     const last = [...data].sort((a,b)=>b.id-a.id).slice(0,6);
     $("#r-recent").innerHTML = last.length ? last.map((c)=>`<li><div><a href="#/criativo/${c.id}">${esc(c.name)}</a><div class="sub">${esc(c.product||"—")} · ${FORMAT[c.format]} · ${fDate(c.start_date)}</div></div>${chipFor(c.health)}</li>`).join("") : `<li class="mut">Nenhum criativo ainda.</li>`;
-  } catch { $("#r-recent").innerHTML = `<li class="mut">—</li>`; }
+  } catch { const el = $("#r-recent"); if (el) el.innerHTML = `<li class="mut">—</li>`; }
 }
-async function submit(goDaily, err) {
+async function submitRegister(goDaily, err) {
+  if (R.mode === "bulk") {
+    const names = bulkNames();
+    if (!names.length) { err("Digite pelo menos um nome, um por linha.", "#r-bulk"); return; }
+    try {
+      const { data } = await api("/api/creatives/bulk", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({ names, product: R.product.trim(), format: R.format, start_date: R.start, status: R.status }) });
+      // Mantém produto/formato/data para encadear; limpa só a lista.
+      R.bulk = "";
+      toast(data.length === 1 ? `Criativo cadastrado: ${data[0].name}` : `${data.length} criativos cadastrados`);
+      if (goDaily) { location.hash = "#/lancamento"; } else { pageRegister(); const f = $("#r-bulk"); if (f) f.focus(); }
+    } catch (e) {
+      const warns = e.body?.warnings ?? [];
+      if (e.body?.error === "nome_duplicado") err(warns[0] || "Há nomes repetidos ou já cadastrados (em vermelho).", "#r-bulk");
+      else err("Não foi possível cadastrar. Confira os campos.", "#r-bulk");
+    }
+    return;
+  }
   const payload = { name: R.name.trim(), product: R.product.trim(), format: R.format, start_date: R.start, status: R.status, url: R.url.trim(), notes: R.notes };
-  if (!payload.name) { err("Informe o nome do criativo."); return; }
+  if (!payload.name) { err("Informe o nome do criativo.", "#r-name"); return; }
   try {
     const { data } = await api("/api/creatives", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify(payload) });
     // Mantém produto/formato/data para encadear; limpa só nome/link/observações.
@@ -205,8 +266,8 @@ async function submit(goDaily, err) {
     if (goDaily) { location.hash = "#/lancamento"; } else { pageRegister(); const f = $("#r-name"); if (f) f.focus(); }
   } catch (e) {
     const warns = e.body?.warnings ?? [];
-    if (e.body?.error === "nome_duplicado") err(warns[0] || "Já existe um criativo com esse nome.");
-    else err("Não foi possível cadastrar. Confira os campos.");
+    if (e.body?.error === "nome_duplicado") err(warns[0] || "Já existe um criativo com esse nome.", "#r-name");
+    else err("Não foi possível cadastrar. Confira os campos.", "#r-name");
   }
 }
 
@@ -219,11 +280,164 @@ async function pageDetail(id) {
     <a href="#/criativos" style="color:var(--muted);text-decoration:none">← Criativos</a>
     <div class="ph"><div><h1>${esc(c.name)}</h1><p class="sub">${esc(c.product||"—")} · ${FORMAT[c.format]} · início em ${fDate(c.start_date)}</p></div><div>${chipFor(c.health)}</div></div>
     <section class="panel"><div class="panel-b" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${rulerFor(c.health)}<span><strong class="prof ${pc}">${fBRL(c.totals.profit_cents)}</strong> <span class="mut">lucro · ${fBRL(c.totals.investment_cents)} investidos · ${c.totals.sales} vendas</span></span><span class="mut">${esc(c.health.motivo ?? (c.health.dia1 ? "—" : "Pré-cadastro: sem Dia 1, sem Sinal até ter movimento."))}</span></div></section>
-    <section class="panel"><div class="panel-b"><strong>Lançamentos diários</strong><p class="sub">A planilha editável (TOTAL, filtro por mês, adicionar dia) chega no T4. O lançamento em lote de todos os Ativos chega no T3.</p><div class="actions"><a class="btn ghost" href="#/lancamento">Ir para lançamento</a></div></div></section>`;
+    <section class="panel"><div class="panel-b"><strong>Lançamentos diários</strong><p class="sub">A planilha editável (TOTAL, filtro por mês, adicionar dia) chega no T4.</p><div class="actions"><a class="btn ghost" href="#/lancamento">Ir para lançamento</a></div></div></section>`;
   } catch { location.hash = "#/criativos"; }
 }
-function pageDailyStub() {
-  view().innerHTML = `<div class="ph"><div><h1>Lançamento diário</h1><p class="sub">A tabela de todos os Ativos (Enter desce de linha, contador, salvar em lote) chega no T3.</p></div><a class="btn ghost" href="#/criativos">Voltar</a></div>`;
+// ---------- Lançamento diário em lote (T3) ----------
+// Um dia, todos os Ativos numa tabela só. Tudo recalcula ao digitar via Calc.
+const DY = { date: todayLocal() };
+const fmtInputCents = (cents) => cents == null ? "" : (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function pageDaily() {
+  view().innerHTML = `
+  <div class="ph"><div><h1>Lançamento diário</h1><p class="sub">Lance o dia de todos os Ativos numa tabela só.</p></div><a class="btn ghost" href="#/cadastro">Cadastrar criativo</a></div>
+  <div class="daybar">
+    <button class="btn ghost sm" id="dy-prev" type="button" aria-label="Dia anterior">←</button>
+    <input type="date" class="in sm" id="dy-date" style="width:auto" aria-label="Data do lançamento">
+    <button class="btn ghost sm" id="dy-next" type="button" aria-label="Próximo dia">→</button>
+    <button class="btn ghost sm" id="dy-today" type="button">Hoje</button>
+    <span class="long" id="dy-long"></span>
+  </div>
+  <section class="panel"><div class="scroll" id="dy-body"><div class="panel-b mut">Carregando…</div></div>
+    <div class="warnbox" id="dy-warn" hidden></div>
+    <div class="savebar"><span id="dy-count" class="mut"></span><button class="btn" id="dy-save" type="button">Salvar lançamentos</button></div></section>`;
+  const go = (d) => { if (!d || d > todayLocal()) return; DY.date = d; renderDay(); };
+  $("#dy-date").max = todayLocal();
+  $("#dy-prev").addEventListener("click", () => {
+    const [y, m, d] = DY.date.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d - 1));
+    go(dt.toISOString().slice(0, 10));
+  });
+  $("#dy-next").addEventListener("click", () => {
+    const [y, m, d] = DY.date.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + 1));
+    const iso = dt.toISOString().slice(0, 10);
+    if (iso <= todayLocal()) go(iso);
+  });
+  $("#dy-today").addEventListener("click", () => go(todayLocal()));
+  $("#dy-date").addEventListener("change", (e) => go(e.target.value));
+  $("#dy-save").addEventListener("click", saveDay);
+  const body = $("#dy-body");
+  body.addEventListener("input", (ev) => { const tr = ev.target.closest("tr[data-cid]"); if (tr) { paintDayRow(tr); countDay(); } });
+  body.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" || !ev.target.matches("input[data-f]")) return;
+    ev.preventDefault();
+    const nxt = ev.target.closest("tr").nextElementSibling;
+    const t = nxt ? nxt.querySelector(`input[data-f="${ev.target.dataset.f}"]`) : null;
+    if (t) { t.focus(); t.select(); } else $("#dy-save").focus();
+  });
+  renderDay();
+}
+async function renderDay() {
+  const date = DY.date;
+  $("#dy-date").value = date;
+  $("#dy-next").disabled = date >= todayLocal();
+  const [y, m, d] = date.split("-");
+  $("#dy-long").textContent = `${d}/${m}/${y.slice(2)}`;
+  const box = $("#dy-body");
+  try {
+    const { data } = await api("/api/entries?date=" + date);
+    if (!data.length) {
+      box.innerHTML = `<div class="empty"><strong>Nenhum criativo ativo</strong><span>Cadastre um criativo ou mude o status para Ativo/Escalando.</span><a class="btn" href="#/cadastro">Cadastrar criativo</a></div>`;
+      $("#dy-save").disabled = true; $("#dy-count").textContent = "";
+      return;
+    }
+    const cell = (f, val, mode, ph) => `<td><input class="ci" data-f="${f}" inputmode="${mode}" value="${esc(val)}" placeholder="${esc(ph)}"></td>`;
+    box.innerHTML = `<table class="tbl daytbl"><thead><tr><th>Criativo</th><th class="num">Invest. (R$)</th><th class="num">Vendas</th><th class="num">Fatur. (R$)</th><th class="num">Cliques Meta</th><th class="num">Cliques Shopee</th><th class="num">Custo</th><th class="num">Lucro</th><th class="num">CPC Meta</th><th class="num">CPC Shopee</th><th>Saúde</th></tr></thead><tbody>${data.map((r) => {
+      const e = r.entry;
+      return `<tr data-cid="${r.creative.id}" data-tax="${r.tax_rate}" data-dia1="${esc(r.dia1 ?? "")}"><td><div class="nm">${esc(r.creative.name)}</div><div class="sub">${esc(r.creative.product || "—")}</div></td>`
+        + cell("invest", e ? fmtInputCents(e.investment_cents) : "", "decimal", "0,00")
+        + cell("sales", e ? String(e.sales) : "", "numeric", "0")
+        + cell("rev", e && e.revenue_cents != null ? fmtInputCents(e.revenue_cents) : "", "decimal", "pendente")
+        + cell("clM", e ? String(e.clicks_meta) : "", "numeric", "0")
+        + cell("clS", e ? String(e.clicks_shopee) : "", "numeric", "0")
+        + `<td class="calc" data-c="cost">—</td><td class="calc" data-c="profit">—</td><td class="calc" data-c="cpcM">—</td><td class="calc" data-c="cpcS">—</td><td class="mut" data-c="health">—</td></tr>`;
+    }).join("")}</tbody></table>`;
+    $$("#dy-body tr[data-cid]").forEach(paintDayRow);
+    countDay();
+    const w = $("#dy-warn"); if (w) w.hidden = true;
+  } catch {
+    box.innerHTML = `<div class="empty"><strong>Não foi possível carregar o dia</strong></div>`;
+  }
+}
+function paintDayRow(tr) {
+  const tax = Number(tr.dataset.tax || 0.1386);
+  const date = DY.date;
+  const dia1 = tr.dataset.dia1 || null;
+  const inv = Calc.parseMoedaParaCentavos($('[data-f="invest"]', tr).value);
+  const rev = Calc.parseMoedaParaCentavos($('[data-f="rev"]', tr).value);
+  const sales = Calc.parseInteiro($('[data-f="sales"]', tr).value);
+  const clM = Calc.parseInteiro($('[data-f="clM"]', tr).value);
+  const clS = Calc.parseInteiro($('[data-f="clS"]', tr).value);
+  const invC = inv == null ? 0 : inv;
+  const salesN = sales == null ? 0 : sales;
+  const clMN = clM == null ? 0 : clM;
+  const clSN = clS == null ? 0 : clS;
+  const bad = [inv, sales, clM, clS].some((v) => typeof v === "number" && Number.isNaN(v)) || (rev != null && Number.isNaN(rev));
+  // Módulo único de cálculo (spec #6): custo/lucro/CPCs/pendente vêm do Calc.
+  const row = bad ? null : Calc.calcRow({ date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax });
+  const cost = row ? row.cost_cents : null;
+  const isPending = row ? row.is_pending : false;
+  const profit = row ? row.profit_cents : null;
+  const cpcM = row ? row.cpc_meta_cents : null;
+  const cpcS = row ? row.cpc_shopee_cents : null;
+  $('[data-c="cost"]', tr).textContent = Calc.formatBRL(cost);
+  const pEl = $('[data-c="profit"]', tr);
+  pEl.textContent = isPending ? "pendente" : Calc.formatBRL(profit);
+  pEl.className = "calc" + (profit == null || isPending ? "" : profit >= 0 ? " prof good" : " prof bad");
+  $('[data-c="cpcM"]', tr).textContent = Calc.formatCPC(cpcM);
+  $('[data-c="cpcS"]', tr).textContent = Calc.formatCPC(cpcS);
+  const hEl = $('[data-c="health"]', tr);
+  if (bad || (invC === 0 && salesN === 0 && clMN === 0 && clSN === 0 && rev == null)) { hEl.textContent = "—"; return; }
+  try {
+    const isDia1 = !dia1 || date <= dia1;
+    const sig = Calc.evaluateDay({ date, investment_cents: invC, sales: salesN, revenue_cents: rev, clicks_meta: clMN, clicks_shopee: clSN, tax_rate: tax }, isDia1);
+    hEl.textContent = sig.saude === "atencao" ? `Atenção · ${sig.motivo ?? ""}` : (sig.motivo ?? "Saudável");
+  } catch { hEl.textContent = "—"; }
+}
+const rowFilled = (tr) => ["invest", "sales", "rev", "clM", "clS"].some((f) => $('[data-f="' + f + '"]', tr).value.trim() !== "");
+function countDay() {
+  const rows = $$("#dy-body tr[data-cid]");
+  if (!rows.length) return;
+  const n = rows.filter(rowFilled).length;
+  $("#dy-count").textContent = `${n} de ${rows.length} preenchidos`;
+  $("#dy-save").disabled = n === 0;
+}
+async function saveDay() {
+  const rows = $$("#dy-body tr[data-cid]");
+  const entries = [];
+  $$("#dy-body .ci.bad").forEach((i) => i.classList.remove("bad"));
+  for (const tr of rows) {
+    if (!rowFilled(tr)) continue;
+    const cid = Number(tr.dataset.cid);
+    const inv = Calc.parseMoedaParaCentavos($('[data-f="invest"]', tr).value);
+    const rev = Calc.parseMoedaParaCentavos($('[data-f="rev"]', tr).value);
+    const sales = Calc.parseInteiro($('[data-f="sales"]', tr).value);
+    const clM = Calc.parseInteiro($('[data-f="clM"]', tr).value);
+    const clS = Calc.parseInteiro($('[data-f="clS"]', tr).value);
+    const name = $(".nm", tr).textContent;
+    const mark = (f) => $('[data-f="' + f + '"]', tr).classList.add("bad");
+    let bad = false;
+    for (const [f, v] of [["invest", inv], ["sales", sales], ["rev", rev], ["clM", clM], ["clS", clS]]) {
+      if (typeof v === "number" && Number.isNaN(v)) { mark(f); bad = true; }
+      if (typeof v === "number" && v != null && v < 0) { mark(f); bad = true; }
+    }
+    for (const [f, v] of [["sales", sales], ["clM", clM], ["clS", clS]]) {
+      if (typeof v === "number" && v != null && !Number.isInteger(v)) { mark(f); bad = true; }
+    }
+    if (bad) { toast(`Confira os números de ${name}.`); return; }
+    entries.push({ creative_id: cid, investment_cents: inv ?? 0, sales: sales ?? 0, revenue_cents: rev, clicks_meta: clM ?? 0, clicks_shopee: clS ?? 0 });
+  }
+  if (!entries.length) { toast("Preencha ao menos um criativo."); return; }
+  try {
+    const { warnings } = await api("/api/entries/bulk", { method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({ date: DY.date, entries }) });
+    const w = $("#dy-warn");
+    if (warnings?.length) { w.textContent = warnings.join(" "); w.hidden = false; }
+    else if (w) w.hidden = true;
+    toast(`${entries.length} ${entries.length === 1 ? "lançamento salvo" : "lançamentos salvos"} em ${fDate(DY.date)}`);
+    renderDay();
+  } catch (e) {
+    toast(e.body?.error === "encerrado_sem_lancamento" ? "Criativo encerrado não recebe lançamentos." : "Não foi possível salvar. Confira os números (nada negativo; vendas/cliques inteiros).");
+  }
 }
 
 function router() {
@@ -231,7 +445,7 @@ function router() {
   const h = location.hash || "#/criativos";
   if (h.startsWith("#/cadastro")) { $('[data-nav="cadastro"]').setAttribute("aria-current","page"); pageRegister(); }
   else if (h.startsWith("#/criativo/")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDetail(h.split("/")[2]); }
-  else if (h.startsWith("#/lancamento")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDailyStub(); }
+  else if (h.startsWith("#/lancamento")) { $('[data-nav="lancamento"]').setAttribute("aria-current","page"); pageDaily(); }
   else { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageLibrary(); }
 }
 window.addEventListener("hashchange", router);

@@ -161,6 +161,122 @@ export interface CreateResult {
   body: { data?: CreativeWithTotals; warnings: string[]; error?: string };
 }
 
+export interface BulkCreateInput {
+  names?: unknown;
+  product?: unknown;
+  format?: unknown;
+  start_date?: unknown;
+  status?: unknown;
+}
+
+export interface BulkCreateResult {
+  statusCode: number;
+  body: { data?: CreativeWithTotals[]; warnings: string[]; error?: string; duplicates?: string[] };
+}
+
+export function createCreativesBulk(db: Database, input: BulkCreateInput): BulkCreateResult {
+  const rawNames = Array.isArray(input.names) ? input.names : null;
+  if (!rawNames) {
+    return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
+  }
+  const names = rawNames
+    .filter((n): n is string => typeof n === "string")
+    .map((n) => n.trim())
+    .filter((n) => n !== "");
+  if (names.length === 0) {
+    return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
+  }
+
+  const product = typeof input.product === "string" ? input.product.trim() : "";
+  const formatRaw = typeof input.format === "string" && input.format !== "" ? input.format : "video";
+  const statusRaw = typeof input.status === "string" && input.status !== "" ? input.status : "ativo";
+  const startRaw = typeof input.start_date === "string" && input.start_date !== "" ? input.start_date : todayLocal();
+
+  if (!FORMATS.includes(formatRaw as CreativeFormat)) {
+    return { statusCode: 400, body: { warnings: [], error: "formato_invalido" } };
+  }
+  if (!STATUSES.includes(statusRaw as CreativeStatus)) {
+    return { statusCode: 400, body: { warnings: [], error: "status_invalido" } };
+  }
+  if (!isValidDate(startRaw)) {
+    return { statusCode: 400, body: { warnings: [], error: "data_invalida" } };
+  }
+  const format = formatRaw as CreativeFormat;
+  const status = statusRaw as CreativeStatus;
+
+  // Duplicados intra-lote (case-insensitive) recusam tudo.
+  const seen = new Set<string>();
+  const dupIntra: string[] = [];
+  for (const n of names) {
+    const k = n.toLowerCase();
+    if (seen.has(k)) {
+      if (!dupIntra.some((d) => d.toLowerCase() === k)) dupIntra.push(n);
+    }
+    seen.add(k);
+  }
+  if (dupIntra.length > 0) {
+    return {
+      statusCode: 409,
+      body: {
+        warnings: ["Nomes repetidos na lista. Ajuste os duplicados em vermelho antes de cadastrar."],
+        error: "nome_duplicado",
+        duplicates: dupIntra,
+      },
+    };
+  }
+
+  // Duplicados contra a base (entre não-Encerrados) recusam tudo.
+  if (status !== "encerrado") {
+    const placeholders = names.map(() => "?").join(",");
+    const lowers = names.map((n) => n.toLowerCase());
+    const rows = db
+      .query(`SELECT name FROM creatives WHERE lower(name) IN (${placeholders}) AND status != 'encerrado';`)
+      .all(...lowers) as { name: string }[];
+    if (rows.length > 0) {
+      const dups = rows.map((r) => r.name);
+      return {
+        statusCode: 409,
+        body: {
+          warnings: ["Já existe um Criativo com esse nome. Use outro nome para diferenciar."],
+          error: "nome_duplicado",
+          duplicates: dups,
+        },
+      };
+    }
+  }
+
+  try {
+    db.exec("BEGIN IMMEDIATE;");
+    const created: CreativeWithTotals[] = [];
+    const stmt = db.query(
+      "INSERT INTO creatives (name, product, format, status, start_date, url, notes) VALUES (?, ?, ?, ?, ?, '', '') RETURNING id, name, product, format, status, start_date, url, notes, created_at;",
+    );
+    for (const n of names) {
+      const res = stmt.all(n, product, format, status, startRaw) as CreativeRow[];
+      created.push(withTotals(db, res[0]));
+    }
+    db.exec("COMMIT;");
+    return { statusCode: 201, body: { data: created, warnings: [] } };
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK;");
+    } catch {
+      // ignore
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/UNIQUE|unique/i.test(msg)) {
+      return {
+        statusCode: 409,
+        body: {
+          warnings: ["Já existe um Criativo com esse nome. Use outro nome para diferenciar."],
+          error: "nome_duplicado",
+        },
+      };
+    }
+    throw err;
+  }
+}
+
 export function createCreative(db: Database, input: CreateInput): CreateResult {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const product = typeof input.product === "string" ? input.product.trim() : "";
