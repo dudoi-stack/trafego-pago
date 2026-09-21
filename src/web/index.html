@@ -167,7 +167,7 @@ async function pageRegister() {
       <div class="fld"><label for="r-status">Status inicial</label><select class="in" id="r-status">${Object.entries(STATUS).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>
     </div>
     ${isFuture ? `<p class="hint" id="r-pre">Pré-cadastro: começa em ${fDate(R.start)} — não conta Dia 1 nem dispara Sinal até ter movimento.</p>` : ``}
-    <div class="fld"><label for="r-url">Link do criativo (opcional)</label><input class="in" id="r-url" type="url" value="${esc(R.url)}" placeholder="Pasta do Drive ou link do vídeo"></div>
+    <div class="fld"><label for="r-url">Link do Criativo (opcional)</label><input class="in" id="r-url" type="url" value="${esc(R.url)}" placeholder="Pasta do Drive ou link do Criativo"></div>
     <div class="fld"><label for="r-notes">Observações (opcional)</label><textarea class="in" id="r-notes" placeholder="Gancho, ângulo, público…">${esc(R.notes)}</textarea></div>
     <div class="actions"><button class="btn" id="r-save" type="button">Cadastrar</button><button class="btn ghost" id="r-save-go" type="button">Cadastrar e lançar dados</button></div>
   </div></section>
