@@ -96,6 +96,11 @@ textarea.in{height:auto;min-height:80px;padding:10px 12px;resize:vertical}
 .addday{display:flex;gap:8px;align-items:center;margin-left:auto}
 .in.sm{height:34px;width:auto}
 .btn.sm{height:32px;padding:0 10px;font-size:13px}
+.del{border:0;background:transparent;cursor:pointer;font-size:15px;line-height:1;padding:4px 6px;border-radius:7px}
+.del:hover{background:var(--bad-bg)}
+.sheet tr.todel{opacity:.55}
+.sheet tr.todel input{text-decoration:line-through}
+.sheet tr.dirty td.dt{box-shadow:inset 3px 0 0 var(--warn-seg)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .kpi .lbl{font-size:12px;color:var(--muted);font-weight:700}
@@ -315,10 +320,16 @@ async function submitRegister(goDaily, err) {
 // Colunas digitáveis (brancas): Investimento, Vendas, Faturamento, Cliques Meta/Shopee.
 // Colunas calculadas (cinza, via Calc): Custo, Lucro, CPCs. TOTAL fixo no rodapé = agg().
 // Filtro por mês, adicionar dia (upsert por data), ciclo de vida + régua/Status/Motivo.
-const DT = { id: null, month: "all", creative: null, entries: [], months: [], dia1: null, health: null };
+const DT = { id: null, month: "all", creative: null, entries: [], months: [], dia1: null, health: null, dirty: new Set(), toDelete: new Set() };
 const monthLabel = (m) => { const [y, mo] = m.split("-"); return `${mo}/${y.slice(2)}`; };
+const dtHasPending = () => DT.dirty.size > 0 || DT.toDelete.size > 0;
+function dtGuardDiscard(msg) {
+  if (!dtHasPending()) return true;
+  return confirm(msg || "Há alterações não salvas. Continuar descarta tudo. Deseja continuar?");
+}
 async function pageDetail(id) {
   DT.id = id; DT.month = "all"; DT.creative = null; DT.entries = [];
+  DT.dirty = new Set(); DT.toDelete = new Set();
   view().innerHTML = `<div class="panel-b mut">Carregando…</div>`;
   try {
     await loadDetail();
@@ -336,6 +347,7 @@ async function loadDetail() {
   DT.months = det.data.months;
   DT.dia1 = det.data.dia1;
   DT.health = det.data.health;
+  DT.dirty = new Set(); DT.toDelete = new Set();
   renderDetail(c.data, det);
 }
 function renderDetail(c, det) {
@@ -356,20 +368,28 @@ function renderDetail(c, det) {
   <section class="panel"><div class="panel-b" style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${rulerFor(h)}<span><strong class="prof ${pc}">${esc(profitLabel)}</strong> <span class="mut">lucro · ${fBRL(t.investment_cents)} investidos · ${t.sales} vendas</span></span><span class="mut">${esc(h.motivo ?? (h.dia1 ? "—" : "Pré-cadastro: sem Dia 1, sem Sinal até ter movimento."))}</span></div>
   ${det.warnings?.length ? `<div class="warnbox">${esc(det.warnings.join(" "))}</div>` : ``}</section>
   <section class="panel">
-    <div class="panel-h"><h2>Lançamentos diários</h2><div id="d-months" style="display:flex;gap:6px;flex-wrap:wrap">${[["all", "Tudo"], ...DT.months.map((m) => [m, monthLabel(m)])].map(([k, l]) => `<button type="button" class="pill" data-m="${k}" aria-pressed="${DT.month === k}">${l}</button>`).join("")}</div>
+    <div class="panel-h"><h2>Lançamentos diários — histórico do criativo</h2><div id="d-months" style="display:flex;gap:6px;flex-wrap:wrap">${[["all", "Tudo"], ...DT.months.map((m) => [m, monthLabel(m)])].map(([k, l]) => `<button type="button" class="pill" data-m="${k}" aria-pressed="${DT.month === k}">${l}</button>`).join("")}</div>
     <div class="addday"><input type="date" class="in sm" id="add-date" aria-label="Data do novo lançamento" ${encerrado ? "disabled" : ""}><button class="btn sm" id="add-btn" type="button" ${encerrado ? "disabled" : ""}>+ Adicionar dia</button></div></div>
     <div class="scroll" id="sheetbox"></div>
-    <div class="foot-note">Colunas em cinza são calculadas (Custo = investimento × (1 + imposto) · Lucro = faturamento − custo · CPC = investimento ÷ cliques). Deixe o faturamento vazio até a comissão ser confirmada: o dia fica pendente, fora do lucro. Valores em R$. ${encerrado ? "Encerrado: histórico, sem lançamentos — reabra para lançar." : ""}</div>
+    <div class="warnbox" id="d-warn" hidden></div>
+    <div class="savebar"><span id="d-count" class="mut"></span><button class="btn" id="d-save" type="button" ${encerrado ? "disabled" : ""}>Salvar alterações</button></div>
+    <div class="foot-note">Histórico do criativo: edite os números, marque dias para excluir (🗑) e salve tudo de uma vez. Tab/Enter só navegam — nada é salvo sozinho. Colunas em cinza são calculadas (Custo = investimento × (1 + imposto) · Lucro = faturamento − custo · CPC = investimento ÷ cliques). Deixe o faturamento vazio até a comissão ser confirmada: o dia fica pendente, fora do lucro. Valores em R$. ${encerrado ? "Encerrado: histórico, sem lançamentos — reabra para lançar." : ""}</div>
   </section>`;
+  view().querySelector('a[href="#/criativos"]').addEventListener("click", (e) => {
+    if (!dtGuardDiscard("Há alterações não salvas neste criativo. Voltar sem salvar descarta tudo. Continuar?")) e.preventDefault();
+  });
   $("#d-months").addEventListener("click", (e) => {
     const b = e.target.closest("[data-m]");
     if (!b) return;
+    if (b.dataset.m === DT.month) return;
+    if (!dtGuardDiscard("Há alterações não salvas. Trocar de mês sem salvar descarta tudo. Continuar?")) return;
     DT.month = b.dataset.m;
     loadDetail();
   });
   view().querySelector(".d-actions").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-act]");
     if (!b) return;
+    if (dtHasPending() && !confirm("Há alterações não salvas. Trocar o status sem salvar descarta tudo. Continuar?")) return;
     try {
       await api("/api/creatives/" + DT.id, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status: b.dataset.act }) });
       toast(b.dataset.act === "escalando" ? "Marcado como Escalando" : b.dataset.act === "ativo" ? (st === "encerrado" || st === "pausado" ? "Criativo reaberto" : "Escala desmarcada") : b.dataset.act === "pausado" ? "Criativo pausado — ainda recebe vendas (cookie)" : "Criativo encerrado — fica no histórico");
@@ -386,6 +406,7 @@ function renderDetail(c, det) {
     $("#add-btn").addEventListener("click", async () => {
       const d = addInput.value;
       if (!d) return;
+      if (dtHasPending()) { toast("Salve as alterações antes de adicionar um dia."); return; }
       if (DT.entries.some((e) => e.date === d)) {
         const tr = view().querySelector(`tr[data-date="${d}"]`);
         if (tr) { tr.scrollIntoView({ block: "nearest" }); const i = tr.querySelector("input"); if (i) i.focus(); }
@@ -402,25 +423,33 @@ function renderDetail(c, det) {
     });
   }
   renderSheet();
+  countDetail();
   const box = $("#sheetbox");
   box.addEventListener("input", (ev) => {
     const inp = ev.target.closest("input[data-f]");
     if (!inp) return;
-    paintDetailRow(inp.closest("tr"));
+    const tr = inp.closest("tr");
+    if (DT.toDelete.has(tr.dataset.date)) return;
+    DT.dirty.add(tr.dataset.date);
+    tr.classList.add("dirty");
+    paintDetailRow(tr);
     paintDetailTotals();
+    countDetail();
   });
   box.addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter" || !ev.target.matches("input[data-f]")) return;
     ev.preventDefault();
-    ev.target.blur();
+    const tr = ev.target.closest("tr");
+    const nxt = tr ? tr.nextElementSibling : null;
+    const t = nxt ? nxt.querySelector(`input[data-f="${ev.target.dataset.f}"]`) : null;
+    if (t) { t.focus(); t.select(); } else { const s = $("#d-save"); if (s && !s.disabled) s.focus(); }
   });
-  box.addEventListener("focusout", async (ev) => {
-    const inp = ev.target.closest("input[data-f]");
-    if (!inp) return;
-    const tr = inp.closest("tr");
-    if (inp.classList.contains("bad")) return;
-    await saveDetailRow(tr);
+  box.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-del]");
+    if (!b) return;
+    toggleDetailDelete(b.dataset.del);
   });
+  $("#d-save").addEventListener("click", saveDetailBulk);
 }
 function detailEntryFromRow(tr) {
   const tax = Number(tr.dataset.tax || 0.1386);
@@ -466,6 +495,7 @@ function paintDetailTotals() {
   const rows = $$("#sheetbox tr[data-date]");
   const days = [];
   for (const tr of rows) {
+    if (DT.toDelete.has(tr.dataset.date)) continue;
     const { tax, date, inv, rev, sales, clM, clS } = detailEntryFromRow(tr);
     if ([inv, sales, clM, clS].some((v) => typeof v === "number" && Number.isNaN(v))) continue;
     days.push({ date, investment_cents: inv ?? 0, sales: sales ?? 0, revenue_cents: rev, clicks_meta: clM ?? 0, clicks_shopee: clS ?? 0, tax_rate: tax });
@@ -489,9 +519,11 @@ function renderSheet() {
     box.innerHTML = `<div class="empty"><strong>Nenhum lançamento${DT.month !== "all" ? " neste mês" : " ainda"}</strong><span>${encerrado ? "Criativo encerrado: histórico, sem lançamentos." : "Adicione o primeiro dia acima ou lance pelo Lançamento diário."}</span></div>`;
     return;
   }
-  box.innerHTML = `<table class="sheet"><thead><tr><th class="l">Data</th><th>Investimento</th><th>Custo c/ imposto</th><th>Vendas</th><th>Faturamento</th><th>Lucro</th><th>Cliques Meta</th><th>Cliques Shopee</th><th>CPC Meta</th><th>CPC Shopee</th><th class="l">Saúde do dia</th></tr></thead><tbody>${DT.entries.map((e) => {
+  box.innerHTML = `<table class="sheet"><thead><tr><th class="l">Data</th><th>Investimento</th><th>Custo c/ imposto</th><th>Vendas</th><th>Faturamento</th><th>Lucro</th><th>Cliques Meta</th><th>Cliques Shopee</th><th>CPC Meta</th><th>CPC Shopee</th><th class="l">Saúde do dia</th><th class="l">Excluir</th></tr></thead><tbody>${DT.entries.map((e) => {
     const dis = encerrado ? "disabled" : "";
-    return `<tr data-date="${e.date}" data-tax="${e.tax_rate}"><td class="dt">${fDate(e.date)}${e.is_dia1 ? `<span class="dia1">Dia 1</span>` : ``}</td>`
+    const isDel = DT.toDelete.has(e.date);
+    const isDirty = DT.dirty.has(e.date);
+    return `<tr data-date="${e.date}" data-tax="${e.tax_rate}" class="${isDel ? "todel" : ""} ${isDirty ? "dirty" : ""}"><td class="dt">${fDate(e.date)}${e.is_dia1 ? `<span class="dia1">Dia 1</span>` : ``}${isDel ? ` <span class="chip bad">excluir</span>` : ``}</td>`
       + `<td><input class="ci" data-f="invest" inputmode="decimal" value="${esc(e.investment_cents ? fmtInputCents(e.investment_cents) : "")}" placeholder="0,00" ${dis}></td>`
       + `<td class="calc" data-c="cost">—</td>`
       + `<td><input class="ci" data-f="sales" inputmode="numeric" value="${esc(e.sales ? String(e.sales) : "")}" placeholder="0" ${dis}></td>`
@@ -500,15 +532,44 @@ function renderSheet() {
       + `<td><input class="ci" data-f="clM" inputmode="numeric" value="${esc(e.clicks_meta ? String(e.clicks_meta) : "")}" placeholder="0" ${dis}></td>`
       + `<td><input class="ci" data-f="clS" inputmode="numeric" value="${esc(e.clicks_shopee ? String(e.clicks_shopee) : "")}" placeholder="0" ${dis}></td>`
       + `<td class="calc" data-c="cpcM">—</td><td class="calc" data-c="cpcS">—</td>`
-      + `<td class="mut" data-c="health" style="white-space:normal;min-width:140px">—</td></tr>`;
-  }).join("")}</tbody><tfoot><tr><td class="dt">TOTAL</td><td data-t="invest"></td><td data-t="cost"></td><td data-t="sales"></td><td data-t="rev"></td><td data-t="profit"></td><td data-t="clM"></td><td data-t="clS"></td><td data-t="cpcM"></td><td data-t="cpcS"></td><td></td></tr></tfoot></table>`;
+      + `<td class="mut" data-c="health" style="white-space:normal;min-width:140px">—</td>`
+      + `<td>${encerrado ? "" : `<button type="button" class="del" data-del="${e.date}" title="${isDel ? "Desfazer exclusão" : "Marcar para excluir"}" aria-label="${isDel ? "Desfazer exclusão de " : "Excluir "}${fDate(e.date)}">${isDel ? "↩️" : "🗑️"}</button>`}</td></tr>`;
+  }).join("")}</tbody><tfoot><tr><td class="dt">TOTAL</td><td data-t="invest"></td><td data-t="cost"></td><td data-t="sales"></td><td data-t="rev"></td><td data-t="profit"></td><td data-t="clM"></td><td data-t="clS"></td><td data-t="cpcM"></td><td data-t="cpcS"></td><td></td><td></td></tr></tfoot></table>`;
   $$("#sheetbox tr[data-date]").forEach(paintDetailRow);
   paintDetailTotals();
 }
-async function saveDetailRow(tr) {
-  const date = tr.dataset.date;
+function toggleDetailDelete(date) {
+  if (DT.creative.status === "encerrado") { toast("Criativo encerrado não recebe lançamentos."); return; }
+  if (DT.toDelete.has(date)) {
+    DT.toDelete.delete(date);
+    const tr = view().querySelector(`tr[data-date="${date}"]`);
+    if (tr) { tr.classList.remove("todel"); }
+    renderSheet();
+    $$("#sheetbox tr[data-date]").forEach(paintDetailRow);
+    paintDetailTotals();
+    countDetail();
+    return;
+  }
+  if (!confirm(`Excluir o dia ${fDate(date)} de ${DT.creative.name}? O dia some como se nunca tivesse existido.`)) return;
+  DT.toDelete.add(date);
+  DT.dirty.delete(date);
+  renderSheet();
+  $$("#sheetbox tr[data-date]").forEach(paintDetailRow);
+  paintDetailTotals();
+  countDetail();
+}
+function countDetail() {
+  const btn = $("#d-save");
+  const lbl = $("#d-count");
+  if (!btn || !lbl) return;
+  const n = DT.dirty.size + DT.toDelete.size;
+  if (!DT.entries.length) { lbl.textContent = ""; btn.disabled = true; return; }
+  lbl.textContent = n === 0 ? `${DT.entries.length} dia(s) — nada a salvar` : `${n} alteração(ões) não salva(s) em ${DT.entries.length} dia(s)`;
+  btn.disabled = n === 0 || DT.creative.status === "encerrado";
+}
+function validateDetailRow(tr) {
   const { inv, rev, sales, clM, clS } = detailEntryFromRow(tr);
-  const name = DT.creative.name;
+  $$(".ci", tr).forEach((i) => i.classList.remove("bad"));
   let bad = false;
   const mark = (f) => { $('[data-f="' + f + '"]', tr).classList.add("bad"); bad = true; };
   for (const [f, v] of [["invest", inv], ["sales", sales], ["rev", rev], ["clM", clM], ["clS", clS]]) {
@@ -518,13 +579,42 @@ async function saveDetailRow(tr) {
   for (const [f, v] of [["sales", sales], ["clM", clM], ["clS", clS]]) {
     if (typeof v === "number" && v != null && !Number.isInteger(v)) mark(f);
   }
-  if (bad) { toast(`Confira os números de ${name} em ${fDate(date)}.`); return; }
+  return bad ? null : { inv: inv ?? 0, sales: sales ?? 0, rev, clM: clM ?? 0, clS: clS ?? 0 };
+}
+async function saveDetailBulk() {
+  if (!dtHasPending()) { toast("Nada a salvar."); return; }
+  const rows = $$("#sheetbox tr[data-date]");
+  const entries = [];
+  let firstBad = null;
+  for (const tr of rows) {
+    const date = tr.dataset.date;
+    if (DT.toDelete.has(date)) continue;
+    if (!DT.dirty.has(date)) continue;
+    const v = validateDetailRow(tr);
+    if (!v) { if (!firstBad) firstBad = tr; continue; }
+    entries.push({ date, investment_cents: v.inv, sales: v.sales, revenue_cents: v.rev, clicks_meta: v.clM, clicks_shopee: v.clS });
+  }
+  if (firstBad) {
+    const d = firstBad.dataset.date;
+    toast(`Confira os números de ${DT.creative.name} em ${fDate(d)}. Nada foi salvo.`);
+    const i = firstBad.querySelector("input.bad");
+    if (i) i.focus();
+    return;
+  }
+  const deletions = [...DT.toDelete];
+  if (!entries.length && !deletions.length) { toast("Nada a salvar."); return; }
   try {
-    await api(`/api/creatives/${DT.id}/entries/${date}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ investment_cents: inv ?? 0, sales: sales ?? 0, revenue_cents: rev, clicks_meta: clM ?? 0, clicks_shopee: clS ?? 0 }) });
-    toast(`Dia ${fDate(date)} salvo`);
+    const { warnings } = await api(`/api/creatives/${DT.id}/entries/bulk`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ entries, deletions }) });
+    const w = $("#d-warn");
+    if (warnings?.length) { w.textContent = warnings.join(" "); w.hidden = false; }
+    else if (w) w.hidden = true;
+    const parts = [];
+    if (entries.length) parts.push(`${entries.length} dia(s) salvo(s)`);
+    if (deletions.length) parts.push(`${deletions.length} excluído(s)`);
+    toast(parts.join(" · ") || "Salvo");
     await loadDetail();
   } catch (err) {
-    toast(err.body?.error === "encerrado_sem_lancamento" ? "Criativo encerrado não recebe lançamentos." : "Não foi possível salvar. Confira os números.");
+    toast(err.body?.error === "encerrado_sem_lancamento" ? "Criativo encerrado não recebe lançamentos." : "Não foi possível salvar. Confira os números (nada negativo; vendas/cliques inteiros).");
   }
 }
 // ---------- Lançamento diário em lote (T3) ----------
@@ -533,7 +623,7 @@ const DY = { date: todayLocal() };
 const fmtInputCents = (cents) => cents == null ? "" : (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function pageDaily() {
   view().innerHTML = `
-  <div class="ph"><div><h1>Lançamento diário</h1><p class="sub">Lance o dia de todos os Ativos numa tabela só.</p></div><a class="btn ghost" href="#/cadastro">Cadastrar criativo</a></div>
+  <div class="ph"><div><h1>Lançamento diário</h1><p class="sub">Rotina do dia: um dia × todos os Ativos. Correções de dias passados e exclusões ficam no histórico do criativo.</p></div><a class="btn ghost" href="#/cadastro">Cadastrar criativo</a></div>
   <div class="daybar">
     <button class="btn ghost sm" id="dy-prev" type="button" aria-label="Dia anterior">←</button>
     <input type="date" class="in sm" id="dy-date" style="width:auto" aria-label="Data do lançamento">
@@ -929,6 +1019,7 @@ async function pageConfig() {
 function router() {
   $$(".nav a").forEach((a) => a.removeAttribute("aria-current"));
   const h = location.hash || "#/dashboard";
+  if (!h.startsWith("#/criativo/") && typeof DT !== "undefined" && DT.id) { DT.id = null; DT.creative = null; DT.dirty = new Set(); DT.toDelete = new Set(); }
   if (h.startsWith("#/cadastro")) { $('[data-nav="cadastro"]').setAttribute("aria-current","page"); pageRegister(); }
   else if (h.startsWith("#/criativo/")) { $('[data-nav="criativos"]').setAttribute("aria-current","page"); pageDetail(h.split("/")[2]); }
   else if (h.startsWith("#/lancamento")) { $('[data-nav="lancamento"]').setAttribute("aria-current","page"); pageDaily(); }
@@ -937,6 +1028,14 @@ function router() {
   else { $('[data-nav="dashboard"]').setAttribute("aria-current","page"); pageDashboard(); }
 }
 window.addEventListener("hashchange", router);
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('a[href^="#/"]');
+  if (!a) return;
+  if (!DT.id || !DT.creative) return;
+  if (!dtHasPending()) return;
+  if (a.getAttribute("href").startsWith("#/criativo/" + DT.id)) return;
+  if (!confirm("Há alterações não salvas neste criativo. Sair sem salvar descarta tudo. Continuar?")) e.preventDefault();
+}, true);
 router();
 </script>
 </body>
