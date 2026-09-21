@@ -32,6 +32,10 @@ _Avoid_: em escala, scale, hot
 Conjunto de números de um criativo em um dia (investimento, vendas, faturamento, cliques).
 _Avoid_: entrada, apontamento, log diário
 
+**Excluir lançamento**:
+Apagar os números de um criativo em um dia, como se o dia nunca tivesse existido.
+_Avoid_: zerar, limpar dia, deletar linha
+
 **Dia 1**:
-Primeiro dia com lançamento do criativo; os dias anteriores (pré-cadastro) não contam para as regras.
+Primeiro dia com movimento do criativo; se for excluído, o próximo dia com movimento vira Dia 1. Dias de pré-cadastro não contam.
 _Avoid_: data de início, start date como regra

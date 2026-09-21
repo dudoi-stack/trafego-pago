@@ -213,3 +213,145 @@ export function saveOneEntry(
   }
   return { statusCode: 200, body: { data: r.body.data[0], warnings: r.body.warnings } };
 }
+
+export interface DeleteOneResult {
+  statusCode: number;
+  body: { data?: { creative_id: number; date: string }; warnings: string[]; error?: string };
+}
+
+/** Exclui o lançamento de um dia (DELETE físico do par criativo+data). */
+export function deleteOneEntry(db: Database, creativeId: number, date: string): DeleteOneResult {
+  if (!Number.isInteger(creativeId) || creativeId <= 0) {
+    return { statusCode: 404, body: { warnings: [], error: "criativo_nao_encontrado" } };
+  }
+  if (!isValidDate(date)) {
+    return { statusCode: 400, body: { warnings: [], error: "data_invalida" } };
+  }
+  const crows = db.query("SELECT id, status FROM creatives WHERE id = ?;").all(creativeId) as {
+    id: number;
+    status: string;
+  }[];
+  if (crows.length === 0) {
+    return { statusCode: 404, body: { warnings: [], error: "criativo_nao_encontrado" } };
+  }
+  if (crows[0].status === "encerrado") {
+    return { statusCode: 400, body: { warnings: [], error: "encerrado_sem_lancamento" } };
+  }
+  const existing = db
+    .query("SELECT creative_id FROM daily_entries WHERE creative_id = ? AND date = ?;")
+    .all(creativeId, date) as { creative_id: number }[];
+  if (existing.length === 0) {
+    return { statusCode: 404, body: { warnings: [], error: "lancamento_nao_encontrado" } };
+  }
+  db.query("DELETE FROM daily_entries WHERE creative_id = ? AND date = ?;").run(creativeId, date);
+  return { statusCode: 200, body: { data: { creative_id: creativeId, date }, warnings: [] } };
+}
+
+export interface SaveCreativeBulkResult {
+  statusCode: number;
+  body: { data?: { saved: EntryRow[]; deleted: string[] }; warnings: string[]; error?: string };
+}
+
+/**
+ * Salva o Detalhe em lote: upserts das linhas sujas + deletes das marcadas,
+ * tudo numa transação só (tudo-ou-nada). Dia 1/Sinal/TOTAL recalculam
+ * sozinhos na leitura (findDia1 ignora dias sem movimento).
+ */
+export function saveCreativeBulk(
+  db: Database,
+  creativeId: number,
+  rawEntries: unknown,
+  rawDeletions: unknown,
+): SaveCreativeBulkResult {
+  if (!Number.isInteger(creativeId) || creativeId <= 0) {
+    return { statusCode: 404, body: { warnings: [], error: "criativo_nao_encontrado" } };
+  }
+  const crows = db.query("SELECT id, status FROM creatives WHERE id = ?;").all(creativeId) as {
+    id: number;
+    status: string;
+  }[];
+  if (crows.length === 0) {
+    return { statusCode: 404, body: { warnings: [], error: "criativo_nao_encontrado" } };
+  }
+  if (crows[0].status === "encerrado") {
+    return { statusCode: 400, body: { warnings: [], error: "encerrado_sem_lancamento" } };
+  }
+  const entries = Array.isArray(rawEntries) ? rawEntries : null;
+  const deletions = Array.isArray(rawDeletions) ? rawDeletions : [];
+  if (entries == null) {
+    return { statusCode: 400, body: { warnings: [], error: "lancamentos_vazio" } };
+  }
+  if (entries.length === 0 && deletions.length === 0) {
+    return { statusCode: 400, body: { warnings: [], error: "lancamentos_vazio" } };
+  }
+  for (const d of deletions) {
+    if (typeof d !== "string" || !isValidDate(d)) {
+      return { statusCode: 400, body: { warnings: [], error: "data_invalida" } };
+    }
+  }
+  const parsed: { date: string; value: NormalizedEntry }[] = [];
+  for (const item of entries) {
+    if (typeof item !== "object" || item == null) {
+      return { statusCode: 400, body: { warnings: [], error: "valor_invalido" } };
+    }
+    const rec = item as Record<string, unknown>;
+    const date = typeof rec.date === "string" ? rec.date : "";
+    if (!isValidDate(date)) {
+      return { statusCode: 400, body: { warnings: [], error: "data_invalida" } };
+    }
+    const norm = normalizeEntryFields(rec);
+    if (!norm.ok) {
+      return { statusCode: 400, body: { warnings: [], error: norm.error } };
+    }
+    parsed.push({ date, value: norm.value });
+  }
+
+  const tax = currentTaxRate(db);
+  try {
+    db.exec("BEGIN IMMEDIATE;");
+    for (const d of deletions) {
+      db.query("DELETE FROM daily_entries WHERE creative_id = ? AND date = ?;").run(creativeId, d);
+    }
+    const stmt = db.query(
+      `INSERT INTO daily_entries (creative_id, date, investment_cents, sales, revenue_cents, clicks_meta, clicks_shopee, tax_rate, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))
+       ON CONFLICT (creative_id, date) DO UPDATE SET
+         investment_cents = excluded.investment_cents,
+         sales = excluded.sales,
+         revenue_cents = excluded.revenue_cents,
+         clicks_meta = excluded.clicks_meta,
+         clicks_shopee = excluded.clicks_shopee,
+         updated_at = datetime('now','localtime')
+       RETURNING creative_id, date, investment_cents, sales, revenue_cents, clicks_meta, clicks_shopee, tax_rate;`,
+    );
+    const saved: EntryRow[] = [];
+    for (const p of parsed) {
+      const existing = db
+        .query("SELECT tax_rate FROM daily_entries WHERE creative_id = ? AND date = ?;")
+        .all(creativeId, p.date) as { tax_rate: number }[];
+      const rate = existing.length > 0 ? existing[0].tax_rate : tax;
+      const rows = stmt.all(
+        creativeId,
+        p.date,
+        p.value.investment_cents,
+        p.value.sales,
+        p.value.revenue_cents,
+        p.value.clicks_meta,
+        p.value.clicks_shopee,
+        rate,
+      ) as EntryRow[];
+      saved.push(rows[0]);
+    }
+    db.exec("COMMIT;");
+    const pend = saved.filter((e) => e.revenue_cents == null && e.sales > 0).length;
+    const warnings = pend > 0 && pendingWarning(pend) ? [pendingWarning(pend)!] : [];
+    return { statusCode: 200, body: { data: { saved, deleted: deletions as string[] }, warnings } };
+  } catch (err) {
+    try {
+      db.exec("ROLLBACK;");
+    } catch {
+      // ignore
+    }
+    throw err;
+  }
+}

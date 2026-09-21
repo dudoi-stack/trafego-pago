@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION, CALC_JS, assets } from "./assets.ts";
 import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
-import { getDay, pendingWarning, saveDayBulk, saveOneEntry } from "./entries.ts";
+import { deleteOneEntry, getDay, pendingWarning, saveCreativeBulk, saveDayBulk, saveOneEntry } from "./entries.ts";
 import { getDashboard, parseDashboardQuery } from "./dashboard.ts";
 import { getSettings, updateSettings } from "./settings.ts";
 import { backupNow, ensureDailyBackup, getExportData, listBackupFiles, backupFileSize } from "./backup.ts";
@@ -201,6 +201,22 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
           return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
         }
         const result = saveOneEntry(db, Number(entryUpsert[1]), entryUpsert[2], (body ?? {}) as Record<string, unknown>);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      if (entryUpsert && req.method === "DELETE") {
+        const result = deleteOneEntry(db, Number(entryUpsert[1]), entryUpsert[2]);
+        return Response.json(result.body, { status: result.statusCode });
+      }
+      const creativeBulk = url.pathname.match(/^\/api\/creatives\/(\d+)\/entries\/bulk$/);
+      if (creativeBulk && req.method === "POST") {
+        let body: unknown;
+        try {
+          body = await req.json();
+        } catch {
+          return Response.json({ error: "json_invalido", warnings: [] }, { status: 400 });
+        }
+        const rec = (body ?? {}) as Record<string, unknown>;
+        const result = saveCreativeBulk(db, Number(creativeBulk[1]), rec.entries, rec.deletions ?? []);
         return Response.json(result.body, { status: result.statusCode });
       }
       if (url.pathname === "/api/entries" && req.method === "GET") {
