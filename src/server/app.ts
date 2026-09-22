@@ -2,7 +2,7 @@ import type { Database } from "./runtime/database.ts";
 import { ensureDataDir, openDatabase } from "./db.ts";
 import { INDEX_HTML, APP_VERSION, assets } from "./assets.ts";
 import { createCalcLoader } from "./runtime/calc-loader.ts";
-import { serveHttp, type FetchHandler } from "./runtime/http-server.ts";
+import { serveHttpForRuntime, type FetchHandler } from "./runtime/http-server.ts";
 import { fetchWithTimeout } from "./runtime/wait.ts";
 import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
 import { deleteOneEntry, getDay, pendingWarning, saveCreativeBulk, saveDayBulk, saveOneEntry } from "./entries.ts";
@@ -53,7 +53,7 @@ export function createRequestHandler(
           headers: { "content-type": "text/javascript; charset=utf-8" },
         });
       } catch {
-        return Response.json({ error: "calc_indisponivel" }, { status: 500 });
+        return Response.json({ error: "calc_indisponivel", warnings: [] }, { status: 500 });
       }
     }
     if (url.pathname === "/api/creatives" && req.method === "GET") {
@@ -145,7 +145,7 @@ export function createRequestHandler(
     const detail = url.pathname.match(/^\/api\/creatives\/(\d+)$/);
     if (detail && req.method === "GET") {
       const item = getCreative(db, Number(detail[1]));
-      if (!item) return Response.json({ error: "not_found" }, { status: 404 });
+      if (!item) return Response.json({ error: "not_found", warnings: [] }, { status: 404 });
       return Response.json({ data: item, warnings: [] });
     }
     if (detail && (req.method === "PATCH" || req.method === "PUT")) {
@@ -240,7 +240,7 @@ export function createRequestHandler(
         }
       }
     }
-    return Response.json({ error: "not_found" }, { status: 404 });
+    return Response.json({ error: "not_found", warnings: [] }, { status: 404 });
   };
 }
 
@@ -270,7 +270,8 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
     // Se nem o ao-vivo nem o embutido funcionarem, a rota responde 500.
   }
 
-  const served = serveHttp(host, opts.port ?? 4173, createRequestHandler(db, opts.dataDir, getCalcJs));
+  // Seam HTTP (T1 Bun, T3 Node): o mesmo handler, o adapter do runtime atual.
+  const served = await serveHttpForRuntime(host, opts.port ?? 4173, createRequestHandler(db, opts.dataDir, getCalcJs));
 
   return {
     hostname: served.hostname,

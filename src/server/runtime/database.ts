@@ -17,6 +17,7 @@
 // - close() no encerramento.
 import { createRequire } from "node:module";
 import { existsSync } from "node:fs";
+import { isBunRuntime } from "./env.ts";
 
 export interface DbStatement {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,10 +55,6 @@ export function getNodeDriverKind(): "better-sqlite3" | "node:sqlite" | "indispo
   } catch {
     return "indisponivel";
   }
-}
-
-function isBunRuntime(): boolean {
-  return typeof (globalThis as unknown as { Bun?: unknown }).Bun !== "undefined";
 }
 
 function loadBunDatabaseCtor(): new (path: string, opts?: Record<string, unknown>) => {
