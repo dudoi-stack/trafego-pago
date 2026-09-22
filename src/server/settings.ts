@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Database } from "./runtime/database.ts";
 import { isValidDate } from "../shared/calc.ts";
 
 export const DEFAULT_TAX_RATE = 0.1386;

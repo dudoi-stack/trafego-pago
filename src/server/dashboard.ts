@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Database } from "./runtime/database.ts";
 import { agg, findDia1, healthForPeriod, isValidDate, type DayEntry } from "../shared/calc.ts";
 import { todayLocal, type CreativeRow } from "./creatives.ts";
 import { pendingWarning } from "./entries.ts";
