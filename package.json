@@ -21,7 +21,9 @@
     "typecheck": "tsc --noEmit",
     "embed": "bun run scripts/embed-assets.ts",
     "build": "bun run scripts/build.ts",
-    "build:calc": "bun run scripts/build-calc.ts"
+    "build:calc": "bun run scripts/build-calc.ts",
+    "build:legacy": "bun run scripts/build-legacy.ts",
+    "smoke:legacy": "bun run scripts/smoke-legacy.ts"
   },
   "optionalDependencies": {
     "better-sqlite3": "11.10.0"
