@@ -10,7 +10,7 @@ valores em R$ no formato brasileiro (aceita `4,18` e `4.18`).
 
 ## Requisitos (desenvolvedor)
 
-- [Bun](https://bun.sh) 1.2+ (runtime, testes e empacotamento). Nada mais: zero dependências npm de produção.
+- [Bun](https://bun.sh) 1.2+ (runtime, testes e empacotamento). Variante padrão: zero dependências npm de produção. Variante legacy (Mac antigo, Node 18): `better-sqlite3@11.10.0` pinado em `optionalDependencies` (prebuild darwin-x64, mesmo arquivo sem migração).
 
 ## Rodar em dev
 
