@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "./support/parity.ts";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Database } from "bun:sqlite";
+import { openDatabaseFile } from "../src/server/runtime/database.ts";
 import { startServer } from "../src/server/app.ts";
+import { buildLeiaMe } from "../src/server/leia-me.ts";
 import { formatBRL, parseInteiro, parseMoedaParaCentavos } from "../src/shared/calc.ts";
 
 let dirs: string[] = [];
@@ -55,7 +56,7 @@ describe("T6 — valores em R$ no formato brasileiro (aceita 4,18 e 4.18)", () =
 
 describe("T6 — 100% offline (fontes locais, sem CDN)", () => {
   test("index.html não referencia nada externo (http, CDN, Google Fonts)", async () => {
-    const html = await readFile(new URL("../src/web/index.html", import.meta.url), "utf-8");
+    const html = await readFile(join(process.cwd(), "src", "web", "index.html"), "utf-8");
     // Permite http://127.0.0.1 e https://exemplo.test (placeholder de input);
     // o que não pode é CDN/fonte remota/JS remoto.
     expect(html).not.toMatch(/fonts\.googleapis\.com/);
@@ -81,7 +82,7 @@ describe("T6 — 100% offline (fontes locais, sem CDN)", () => {
 
   test("módulo de cálculo embutido no bundle (exe sem fonte ao lado continua servindo)", async () => {
     // O bundle embutido é gerado por `bun run embed` em src/server/assets.ts.
-    const assets = await readFile(new URL("../src/server/assets.ts", import.meta.url), "utf-8");
+    const assets = await readFile(join(process.cwd(), "src", "server", "assets.ts"), "utf-8");
     expect(assets).toContain("CALC_JS");
   });
 });
@@ -89,7 +90,9 @@ describe("T6 — 100% offline (fontes locais, sem CDN)", () => {
 describe("T6 — atualização sem medo (migração + backup automáticos, backup-antes-de-migrar)", () => {
   async function makeV1Db(dataDir: string): Promise<void> {
     // Simula um banco da versão anterior: só migração 1 aplicada + um dado.
-    const db = new Database(join(dataDir, "gestor.db"), { create: true });
+    // Via seam de persistência (não `bun:sqlite` direto): o mesmo arquivo
+    // abre nos dois runtimes — o teste verifica estado persistido, não runtime.
+    const db = openDatabaseFile(join(dataDir, "gestor.db"), { create: true });
     db.exec("PRAGMA journal_mode = DELETE;");
     db.exec(
       "CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);",
@@ -123,7 +126,7 @@ describe("T6 — atualização sem medo (migração + backup automáticos, backu
     expect(pre.length).toBeGreaterThanOrEqual(1);
 
     // O backup é o banco ANTES da migração (sem a tabela creatives).
-    const probe = new Database(join(dataDir, "backups", pre[0]), { readonly: true });
+    const probe = openDatabaseFile(join(dataDir, "backups", pre[0]), { readonly: true });
     const oldTables = probe
       .query("SELECT name FROM sqlite_master WHERE type='table' AND name='creatives';")
       .all() as unknown[];
@@ -156,7 +159,6 @@ describe("T6 — atualização sem medo (migração + backup automáticos, backu
   });
 
   test("LEIA-ME de 3 passos cobre Win+Mac, SmartScreen, Gatekeeper e atualização", async () => {
-    const { buildLeiaMe } = await import("../src/server/leia-me.ts");
     const txt = buildLeiaMe("0.1.0");
     expect(txt).toMatch(/3 passos/i);
     expect(txt).toMatch(/Mais informações[\s\S]*Executar assim mesmo/);
