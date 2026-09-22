@@ -364,6 +364,7 @@ export interface CreateResult {
 
 export interface BulkCreateInput {
   names?: unknown;
+  items?: unknown;
   product?: unknown;
   format?: unknown;
   start_date?: unknown;
@@ -376,19 +377,34 @@ export interface BulkCreateResult {
 }
 
 export function createCreativesBulk(db: Database, input: BulkCreateInput): BulkCreateResult {
-  const rawNames = Array.isArray(input.names) ? input.names : null;
-  if (!rawNames) {
-    return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
+  // Novo formato: items [{name, product}] (um produto por criativo).
+  // Legado: names[] + product único (mantido para compatibilidade).
+  let pairs: { name: string; product: string }[] = [];
+  if (Array.isArray(input.items)) {
+    for (const it of input.items as unknown[]) {
+      if (typeof it !== "object" || it == null) continue;
+      const rec = it as Record<string, unknown>;
+      const name = typeof rec.name === "string" ? rec.name.trim() : "";
+      if (name === "") continue;
+      const product = typeof rec.product === "string" ? rec.product.trim() : "";
+      pairs.push({ name, product });
+    }
+  } else {
+    const rawNames = Array.isArray(input.names) ? input.names : null;
+    if (!rawNames) {
+      return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
+    }
+    const product = typeof input.product === "string" ? input.product.trim() : "";
+    pairs = rawNames
+      .filter((n): n is string => typeof n === "string")
+      .map((n) => n.trim())
+      .filter((n) => n !== "")
+      .map((n) => ({ name: n, product }));
   }
-  const names = rawNames
-    .filter((n): n is string => typeof n === "string")
-    .map((n) => n.trim())
-    .filter((n) => n !== "");
+  const names = pairs.map((p) => p.name);
   if (names.length === 0) {
     return { statusCode: 400, body: { warnings: [], error: "nome_obrigatorio" } };
   }
-
-  const product = typeof input.product === "string" ? input.product.trim() : "";
   const formatRaw = typeof input.format === "string" && input.format !== "" ? input.format : "video";
   const statusRaw = typeof input.status === "string" && input.status !== "" ? input.status : "ativo";
   const startRaw = typeof input.start_date === "string" && input.start_date !== "" ? input.start_date : todayLocal();
@@ -452,8 +468,8 @@ export function createCreativesBulk(db: Database, input: BulkCreateInput): BulkC
     const stmt = db.query(
       "INSERT INTO creatives (name, product, format, status, start_date, url, notes) VALUES (?, ?, ?, ?, ?, '', '') RETURNING id, name, product, format, status, start_date, url, notes, created_at;",
     );
-    for (const n of names) {
-      const res = stmt.all(n, product, format, status, startRaw) as CreativeRow[];
+    for (const p of pairs) {
+      const res = stmt.all(p.name, p.product, format, status, startRaw) as CreativeRow[];
       created.push(withTotals(db, res[0]));
     }
     db.exec("COMMIT;");

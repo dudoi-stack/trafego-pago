@@ -4,7 +4,7 @@ import { INDEX_HTML, APP_VERSION, CALC_JS, assets } from "./assets.ts";
 import { createCreative, createCreativesBulk, getCreative, getCreativeDetail, listCreatives, updateCreative } from "./creatives.ts";
 import { deleteOneEntry, getDay, pendingWarning, saveCreativeBulk, saveDayBulk, saveOneEntry } from "./entries.ts";
 import { getDashboard, parseDashboardQuery } from "./dashboard.ts";
-import { getSettings, updateSettings } from "./settings.ts";
+import { getSettings, updateSettings, countAffectedByCutoff } from "./settings.ts";
 import { backupNow, ensureDailyBackup, getExportData, listBackupFiles, backupFileSize } from "./backup.ts";
 import { dbPathFor } from "./paths.ts";
 import { isValidDate } from "../shared/calc.ts";
@@ -105,6 +105,13 @@ export async function startServer(opts: StartServerOptions): Promise<StartedServ
       }
       if (url.pathname === "/api/settings" && req.method === "GET") {
         return Response.json({ data: getSettings(db), warnings: [] });
+      }
+      if (url.pathname === "/api/settings/affected" && req.method === "GET") {
+        const from = url.searchParams.get("from") ?? "";
+        if (!isValidDate(from)) {
+          return Response.json({ error: "data_invalida", warnings: [] }, { status: 400 });
+        }
+        return Response.json({ data: { from, count: countAffectedByCutoff(db, from) }, warnings: [] });
       }
       if (url.pathname === "/api/settings" && (req.method === "PUT" || req.method === "PATCH")) {
         let body: unknown;

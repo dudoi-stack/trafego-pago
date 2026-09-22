@@ -7,7 +7,8 @@
 //   e a soma NUNCA arredonda — arredonda só na exibição.
 // - Datas sempre "AAAA-MM-DD".
 // - CPCs em centavos por clique (null = indefinido). Limite Dia 1: 0,10 → 10 centavos.
-// - Sem ROAS (removido da spec). Sem "coletando dados".
+// - ROAS = faturamento ÷ custo c/ imposto. A cor do ROAS é só do número;
+//   a saúde continua vindo do Sinal. Sem "coletando dados".
 
 export type CreativeStatus = "ativo" | "escalando" | "pausado" | "encerrado";
 
@@ -41,8 +42,8 @@ export interface Agg {
   profit_cents: number | null;
   cpc_meta_cents: number | null;
   cpc_shopee_cents: number | null;
-  /** ROAS-equivalente = faturamento ÷ custo fechado (null sem custo fechado).
-   *  Só ordenação/comparação — nunca decide cor (a decisão é o Sinal). */
+  /** ROAS = faturamento ÷ custo fechado (null sem custo fechado).
+   *  Só comparação + cor do número — nunca decide a saúde (a decisão é o Sinal). */
   roas_equivalente: number | null;
   pending_days: number;
   pending_cost_cents: number;
@@ -129,8 +130,8 @@ export function agg(entries: DayEntry[]): Agg {
   // Com dias de zero-venda+vazio, costClosed > 0 e lucro = 0 − custo (prejuízo real).
   const hasClosed = costClosed_cents > 0 || revenue_cents > 0;
   const profit_cents = hasClosed ? revenue_cents - costClosed_cents : entries.length > 0 && !has_pending ? revenue_cents - costClosed_cents : null;
-  // ROAS-equivalente: Σ faturamento ÷ Σ custo fechado (nunca média diária).
-  // Null sem custo fechado (a tela mostra "—"). Não decide cor.
+  // ROAS: Σ faturamento ÷ Σ custo fechado (nunca média diária).
+  // Null sem custo fechado (a tela mostra "—"). Não decide saúde.
   const roas_equivalente = costClosed_cents > 0 ? revenue_cents / costClosed_cents : null;
 
   return {
@@ -285,6 +286,18 @@ export function healthForPeriod(
 export function formatRoas(n: number | null): string {
   if (n == null || !Number.isFinite(n)) return "—";
   return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+/** Faixa do ROAS para cor do número (valor cheio, sem arredondar).
+ *  <=1,29 ruim · 1,30–1,59 mediano · 1,60–1,99 bom · >=2 excelente. Null = sem faixa. */
+export type RoasFaixa = "ruim" | "mediano" | "bom" | "excelente" | null;
+
+export function roasFaixa(n: number | null): RoasFaixa {
+  if (n == null || !Number.isFinite(n)) return null;
+  if (n <= 1.29) return "ruim";
+  if (n < 1.6) return "mediano";
+  if (n < 2) return "bom";
+  return "excelente";
 }
 
 export function formatBRL(cents: number | null): string {

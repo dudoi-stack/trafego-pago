@@ -39,3 +39,11 @@ _Avoid_: zerar, limpar dia, deletar linha
 **Dia 1**:
 Primeiro dia com movimento do criativo; se for excluído, o próximo dia com movimento vira Dia 1. Dias de pré-cadastro não contam.
 _Avoid_: data de início, start date como regra
+
+**ROAS**:
+Faturamento ÷ custo com imposto; só comparação, com faixas ruim, mediano, bom e excelente.
+_Avoid_: ROAS-equiv., ROAS-equivalente
+
+**Imposto**:
+Percentual sobre o investimento que compõe o custo; cada lançamento guarda a própria taxa.
+_Avoid_: taxa
