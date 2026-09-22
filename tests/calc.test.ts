@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "./support/parity.ts";
 import {
   agg,
   calcRow,

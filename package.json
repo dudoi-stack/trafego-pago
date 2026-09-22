@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "description": "Gestor de Tráfego Pago — app local offline (Fase 0: esqueleto executável)",
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.2"
+  },
   "scripts": {
     "dev": "bun run src/server/index.ts",
     "start": "bun run src/server/index.ts",
     "up": "bun run scripts/up.ts",
     "down": "bun run scripts/down.ts",
     "test": "bun test",
+    "test:parity:bun": "bun test tests/api.test.ts tests/calc.test.ts tests/t3.test.ts tests/t4.test.ts tests/t5.test.ts tests/t6.test.ts",
+    "build:parity": "bun run scripts/build-parity.ts",
+    "test:node": "bun run scripts/build-parity.ts && node --test dist/parity/tests/api.js dist/parity/tests/calc.js dist/parity/tests/t3.js dist/parity/tests/t4.js dist/parity/tests/t5.js dist/parity/tests/t6.js",
+    "test:parity": "bun run test:parity:bun && bun run test:node",
     "typecheck": "tsc --noEmit",
     "embed": "bun run scripts/embed-assets.ts",
     "build": "bun run scripts/build.ts",
