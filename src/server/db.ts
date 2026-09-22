@@ -1,12 +1,12 @@
-import { Database } from "bun:sqlite";
 import { mkdir } from "node:fs/promises";
 import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import initSql from "./migrations/001_init.sql" with { type: "text" };
-import domainSql from "./migrations/002_domain.sql" with { type: "text" };
+import { CURRENT_SCHEMA_VERSION, loadMigrationSql } from "./runtime/migrations.ts";
+import { openDatabaseFile, type Database } from "./runtime/database.ts";
 import { dbPathFor } from "./paths.ts";
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export { CURRENT_SCHEMA_VERSION };
+export type { Database };
 
 /** Abre (criando) o SQLite fora do binário e aplica migrações.
  * Requer que o chamador tenha criado o diretório (ver `ensureDataDir`,
@@ -18,7 +18,7 @@ export const CURRENT_SCHEMA_VERSION = 2;
 export function openDatabase(dataDir: string): Database {
   const dbPath = dbPathFor(dataDir);
   const preexisted = existsSync(dbPath);
-  const db = new Database(dbPath, { create: true });
+  const db = openDatabaseFile(dbPath, { create: true });
   db.exec("PRAGMA journal_mode = DELETE;");
   db.exec("PRAGMA foreign_keys = ON;");
   applyMigrations(db, preexisted ? dataDir : null);
@@ -85,6 +85,7 @@ function applyMigrations(db: Database, dataDirForPreBackup: string | null): void
   if (dataDirForPreBackup != null && pending.length > 0) {
     backupBeforeMigrateSync(db, dataDirForPreBackup);
   }
+  const { initSql, domainSql } = loadMigrationSql();
   if (!applied.has(1)) {
     db.exec(initSql);
     db.query("INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (1, datetime('now','localtime'));").run();

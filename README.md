@@ -28,7 +28,7 @@ Para isolar, use `GESTOR_DATA_DIR=./dados bun run dev`. Para não abrir o navega
 ## Testes e typecheck
 
 ```sh
-bun test              # 6 arquivos: cálculo puro (seam 1) + contrato HTTP por rota (seam 2)
+bun test              # 7 arquivos: cálculo puro (seam 1) + contrato HTTP por rota (seam 2) + seams do runtime (T1)
 bun run typecheck     # tsc --noEmit
 ```
 
@@ -58,8 +58,9 @@ Abrir de novo **não** duplica o servidor: o boot sonda `/api/health` em `127.0.
 
 ## Layout
 
-- `src/server/` — `index.ts` (boot), `app.ts` (Bun.serve), `db.ts` (SQLite + migrações com backup-antes-de-migrar), `paths.ts`, `browser.ts`, `backup.ts`, `leia-me.ts`, `assets.ts` (gerado)
+- `src/server/` — `index.ts` (boot), `app.ts` (rotas via `createRequestHandler` + `startServer`), `db.ts` (SQLite + migrações com backup-antes-de-migrar), `paths.ts`, `browser.ts`, `backup.ts`, `leia-me.ts`, `assets.ts` (gerado)
+- `src/server/runtime/` — seams finas do runtime (T1): `database.ts` (persistência), `migrations.ts` (leitura dos SQLs), `calc-loader.ts` (cálculo ao-vivo), `http-server.ts` (servidor loopback), `process.ts` (navegador), `wait.ts` (espera)
 - `src/server/migrations/` — `001_init.sql` (settings + schema_migrations), `002_domain.sql` (criativos + lançamentos)
 - `src/shared/calc.ts` — módulo único de cálculo (servidor + navegador via `/shared/calc.js`, com bundle embutido no exe)
 - `src/web/index.html` — interface (embutida no exe via `scripts/embed-assets.ts`; 100% offline, sem CDN)
-- `tests/` — `calc.test.ts`, `api.test.ts`, `t3/t4/t5/t6.test.ts`
+- `tests/` — `calc.test.ts`, `api.test.ts`, `t3/t4/t5/t6.test.ts`, `seams.test.ts` (seams do runtime)

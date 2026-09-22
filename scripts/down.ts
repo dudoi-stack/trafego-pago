@@ -3,6 +3,7 @@
 // Lê o lockfile (pid + porta) que o boot escreve e encerra aquele processo.
 import { readFile, rm } from "node:fs/promises";
 import { probeHealth } from "../src/server/app.ts";
+import { sleep } from "../src/server/runtime/wait.ts";
 import { lockPathFor, resolveDataDir } from "../src/server/paths.ts";
 
 // Mesma faixa do boot (ver src/server/index.ts).
@@ -29,7 +30,7 @@ if (lock && typeof lock.pid === "number" && typeof lock.port === "number") {
     }
     for (let i = 0; i < 50; i += 1) {
       if (!(await probeHealth(port))) break;
-      await Bun.sleep(100);
+      await sleep(100);
     }
     await rm(lockPath, { force: true });
     console.log(`[down] servidor da porta ${port} derrubado.`);

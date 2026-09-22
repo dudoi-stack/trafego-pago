@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Database } from "./runtime/database.ts";
 import { mkdir, readdir, rm, copyFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { dbPathFor } from "./paths.ts";

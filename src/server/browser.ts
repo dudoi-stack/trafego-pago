@@ -1,15 +1,15 @@
+import { spawnDetached } from "./runtime/process.ts";
+
 /** Abre o navegador do SO sem travar o servidor. Falha silenciosa em headless/CI. */
 export async function openBrowser(url: string): Promise<void> {
   if (process.env.GESTOR_NO_BROWSER === "1") return;
   try {
     if (process.platform === "win32") {
-      Bun.spawn(["cmd", "/c", "start", "", url], {
-        stdio: ["ignore", "ignore", "ignore"],
-      });
+      spawnDetached("cmd", ["/c", "start", "", url]);
     } else if (process.platform === "darwin") {
-      Bun.spawn(["open", url], { stdio: ["ignore", "ignore", "ignore"] });
+      spawnDetached("open", [url]);
     } else {
-      Bun.spawn(["xdg-open", url], { stdio: ["ignore", "ignore", "ignore"] });
+      spawnDetached("xdg-open", [url]);
     }
   } catch {
     // Ambiente sem UI (CI): só loga.

@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Database } from "./runtime/database.ts";
 import { findDia1, hasMovement, isValidDate } from "../shared/calc.ts";
 import { getTaxRate } from "./settings.ts";
 import type { CreativeRow, EntryRow } from "./creatives.ts";
