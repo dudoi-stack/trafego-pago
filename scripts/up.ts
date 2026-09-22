@@ -3,6 +3,7 @@
 // Reaproveita o boot de src/server/index.ts (sonda, lockfile, abre o navegador).
 import { fileURLToPath } from "node:url";
 import { probeHealth } from "../src/server/app.ts";
+import { sleep } from "../src/server/runtime/wait.ts";
 
 // Mesma faixa do boot (ver src/server/index.ts — não importar de lá:
 // aquele módulo sobe o servidor ao ser importado).
@@ -49,8 +50,8 @@ for (let i = 0; i < 150; i += 1) {
     console.log(`[up] para derrubar: bun run down`);
     process.exit(0);
   }
-  if ((await Promise.race([child.exited, Bun.sleep(100).then(() => null)])) != null) break;
-  await Bun.sleep(100);
+  if ((await Promise.race([child.exited, sleep(100).then(() => null)])) != null) break;
+  await sleep(100);
 }
 
 console.error("[up] o servidor não respondeu. Rode `bun run dev` em primeiro plano para ver o erro.");
