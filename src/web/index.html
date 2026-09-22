@@ -125,7 +125,7 @@ th[data-sort]{cursor:pointer;user-select:none}.ar{margin-left:4px}
 .bulk-grid .hd{font-size:12px;font-weight:800;color:var(--muted)}
 .bulk-grid input{height:38px;width:100%;padding:0 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
 .bulk-grid input.dup{border-color:var(--bad)}
-.fb{align-items:center}.fb .btn{margin-left:auto}
+.fb{align-items:center}
 </style>
 </head>
 <body>
@@ -834,7 +834,7 @@ function deltaHtml(cur, prev, invert) {
 }
 async function pageDashboard() {
   view().innerHTML = `
-  <div class="ph"><div><h1>Dashboard</h1><p class="sub" id="dash-sub">Decida olhando o painel</p></div></div>
+  <div class="ph" style="align-items:center"><div><h1>Dashboard</h1><p class="sub" id="dash-sub">Decida olhando o painel</p></div><a class="btn" href="#/lancamento">Lançar dados do dia</a></div>
   <div class="fb" role="group" aria-label="Filtros do dashboard">
     <div class="dd" id="dd-period"><button class="ctl" type="button" id="dd-period-btn" aria-haspopup="true">📅 <span id="lbl-period">Período</span></button>
       <div class="dd-menu" id="dd-period-menu">${PRESETS.filter((p)=>p[0]!=="custom").map((p)=>`<button type="button" class="dd-item" data-preset="${p[0]}">${p[1]}</button>`).join("")}<div style="display:flex;gap:6px;margin-top:6px"><label>De <input type="date" class="in sm" id="f-from"></label><label>Até <input type="date" class="in sm" id="f-to"></label></div></div></div>
@@ -844,7 +844,6 @@ async function pageDashboard() {
     <label class="ctl">Produto <select id="f-product"><option value="all">Todos</option></select></label>
     <label class="ctl">Decisão <select id="f-dec"><option value="all">Todas</option><option value="saudavel">Saudável</option><option value="atencao">Atenção</option><option value="escalando">Escalando</option><option value="pausado">Pausado</option><option value="encerrado">Encerrado</option><option value="sem_dados">Sem dados</option></select></label>
     <button class="lnk" type="button" id="f-clear" hidden>Limpar filtros</button>
-    <a class="btn" href="#/lancamento">Lançar dados do dia</a>
   </div>
   <div id="dash-res"><div class="panel"><div class="panel-b mut">Carregando…</div></div></div>`;
   try {
