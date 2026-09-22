@@ -23,7 +23,7 @@ const outRoot = join(root, "dist", "parity");
 // aparecer sem classificação explícita.)
 const PARITY_TESTS = ["api.test.ts", "calc.test.ts", "t3.test.ts", "t4.test.ts", "t5.test.ts", "t6.test.ts"];
 // Detalhe de runtime, fora da paridade (verificam seams/drivers, não HTTP+estado).
-const RUNTIME_ONLY_TESTS = ["seams.test.ts", "t2-persist-node.test.ts", "t3-boot-node.test.ts"];
+const RUNTIME_ONLY_TESTS = ["seams.test.ts", "t2-persist-node.test.ts", "t3-boot-node.test.ts", "legacy-package.test.ts"];
 {
   const found = (await readdir(join(root, "tests"))).filter((f) => f.endsWith(".test.ts")).sort();
   const expected = [...PARITY_TESTS, ...RUNTIME_ONLY_TESTS].sort();
